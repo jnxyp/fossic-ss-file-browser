@@ -33,6 +33,26 @@ function normalizeClassPath(className: string) {
   return className.replace(/\$[^/]+(?=\.class$|\.java$)/, '');
 }
 
+function getSubclassSuffix(className: string) {
+  const match = className.match(/\$([^/]+)(?=\.class$|\.java$)/);
+  return match?.[1] ?? '';
+}
+
+function buildTargetClassName(sourceClassName: string, subclass?: string) {
+  if (!subclass) {
+    return sourceClassName;
+  }
+
+  const extensionMatch = sourceClassName.match(/\.(class|java)$/);
+  if (!extensionMatch) {
+    return `${sourceClassName}$${subclass}`;
+  }
+
+  const extension = extensionMatch[1];
+  const baseClassName = sourceClassName.slice(0, -extension.length - 1);
+  return `${baseClassName}$${subclass}.${extension}`;
+}
+
 export default function ViewerPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -41,12 +61,13 @@ export default function ViewerPage() {
   const dataset = params.dataset as string;
   const pathSegments = params.path as string[] | undefined;
   const utf8ConstId = searchParams.get('utf8ConstId') ?? undefined;
+  const subclass = searchParams.get('subclass') ?? undefined;
 
   const jarName = pathSegments?.[0] ? decodeURIComponent(pathSegments[0]) : '';
-  const targetClassName = pathSegments
+  const sourceClassName = pathSegments
     ? pathSegments.slice(1).map(segment => decodeURIComponent(segment)).join('/')
     : '';
-  const sourceClassName = targetClassName ? normalizeClassPath(targetClassName) : '';
+  const targetClassName = buildTargetClassName(sourceClassName, subclass ?? undefined);
 
   const [state, setState] = useState<ViewerState>(() => ({
     ...INITIAL_STATE,
@@ -54,14 +75,12 @@ export default function ViewerPage() {
   }));
   const [copied, setCopied] = useState(false);
 
-  const loadFile = useCallback(async (
+  const loadContent = useCallback(async (
     ds: string,
     jar: string,
     sourceCls: string,
-    targetCls: string,
-    targetUtf8ConstId?: string,
   ) => {
-    if (!jar || !sourceCls || !targetCls) {
+    if (!jar || !sourceCls) {
       return;
     }
 
@@ -76,9 +95,7 @@ export default function ViewerPage() {
         ...prev,
         code: `// 错误：无法加载 ${jar} / ${sourceCls}`,
         lang: 'text',
-        highlightLines: [],
         jarName: jar,
-        className: targetCls,
         loading: false,
       }));
       return;
@@ -87,33 +104,49 @@ export default function ViewerPage() {
     const { content } = await contentResponse.json();
     const lang = sourceCls.endsWith('.java') || sourceCls.endsWith('.class') ? 'java' : 'text';
 
-    let highlightLines: number[] = [];
-    if (targetUtf8ConstId) {
-      const indexResponse = await fetch(
-        `/api/files/index?dataset=${ds}&jar=${encodeURIComponent(jar)}&class=${encodeURIComponent(targetCls)}&utf8ConstId=${encodeURIComponent(targetUtf8ConstId)}`
-      );
-      if (indexResponse.ok) {
-        const data = await indexResponse.json();
-        highlightLines = data.lines ?? [];
-      }
-    }
-
-    setState({
+    setState(prev => ({
+      ...prev,
       code: content,
       lang,
-      highlightLines,
       jarName: jar,
-      className: targetCls,
       loading: false,
-    });
+    }));
   }, []);
 
   useEffect(() => {
-    if (jarName && sourceClassName && targetClassName) {
+    if (jarName && sourceClassName) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      void loadFile(dataset, jarName, sourceClassName, targetClassName, utf8ConstId);
+      void loadContent(dataset, jarName, sourceClassName);
     }
-  }, [dataset, jarName, loadFile, sourceClassName, targetClassName, utf8ConstId]);
+  }, [dataset, jarName, loadContent, sourceClassName]);
+
+  useEffect(() => {
+    async function loadHighlightLines() {
+      if (!jarName || !targetClassName) {
+        return;
+      }
+
+      let nextHighlightLines: number[] = [];
+      if (utf8ConstId) {
+        const indexResponse = await fetch(
+          `/api/files/index?dataset=${dataset}&jar=${encodeURIComponent(jarName)}&class=${encodeURIComponent(targetClassName)}&utf8ConstId=${encodeURIComponent(utf8ConstId)}`
+        );
+        if (indexResponse.ok) {
+          const data = await indexResponse.json();
+          nextHighlightLines = data.lines ?? [];
+        }
+      }
+
+      setState(prev => ({
+        ...prev,
+        highlightLines: nextHighlightLines,
+        jarName,
+        className: targetClassName,
+      }));
+    }
+
+    void loadHighlightLines();
+  }, [dataset, jarName, targetClassName, utf8ConstId]);
 
   useEffect(() => {
     async function sendReadyMessage() {
@@ -163,9 +196,17 @@ export default function ViewerPage() {
       }
 
       const payload = message.payload as NavigatePayload;
-      const javaPath = payload.className.replace(/\.class$/, '.java');
+      const sourceJavaPath = normalizeClassPath(payload.className).replace(/\.class$/, '.java');
+      const targetJavaPath = payload.className.replace(/\.class$/, '.java');
+      const query = new URLSearchParams({
+        utf8ConstId: payload.utf8ConstId,
+      });
+      const subclassSuffix = getSubclassSuffix(targetJavaPath);
+      if (subclassSuffix) {
+        query.set('subclass', subclassSuffix);
+      }
       router.push(
-        `/viewer/${dataset}/${encodeURIComponent(payload.jarName)}/${javaPath}?utf8ConstId=${encodeURIComponent(payload.utf8ConstId)}`
+        `/viewer/${dataset}/${encodeURIComponent(payload.jarName)}/${sourceJavaPath}?${query.toString()}`
       );
     }
 

@@ -77,7 +77,7 @@ export default function CodeViewer({ code, lang = 'java', highlightLines = [] }:
   useEffect(() => {
     if (!html || highlightLines.length === 0 || !containerRef.current) return;
     const el = containerRef.current.querySelector('.highlighted-line');
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el?.scrollIntoView({ block: 'center' });
   }, [html, highlightLines]);
 
   return (
