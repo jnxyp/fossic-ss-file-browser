@@ -87,7 +87,7 @@
 
 
 ### M2: 单点跳转闭环
-- [ ] postMessage 协议定义与类型共享
+- [x] postMessage 协议定义与类型共享
 - [ ] Shiki 代码高亮集成
 - [ ] className + utf8_index 定位逻辑实现
 - [ ] 自动滚动与高亮
