@@ -23,7 +23,7 @@ services:
     environment:
       - DATA_ROOT=/app/artifacts
       - APP_INTERNAL_URL=http://app:3000
-      - SYNC_INTERVAL=21600
+      - SYNC_INTERVAL=600
     networks:
       - ss-network
 

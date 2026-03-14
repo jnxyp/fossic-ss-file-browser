@@ -14,6 +14,6 @@ COPY . .
 
 # 环境变量默认值
 ENV DATA_ROOT=/app/artifacts
-ENV SYNC_INTERVAL=21600
+ENV SYNC_INTERVAL=600
 
-CMD ["node", "index.js"]
+CMD ["npx", "tsx", "src/index.ts"]
