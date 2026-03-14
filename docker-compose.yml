@@ -19,6 +19,7 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./artifacts:/app/artifacts
+      - ./tools:/app/tools:ro
     environment:
       - DATA_ROOT=/app/artifacts
       - APP_INTERNAL_URL=http://app:3000

@@ -82,8 +82,9 @@
 - [x] docker-compose.yml 基础拓扑定义
 - [x] 反编译器 (cfr.jar) 就位
 - [x] app 服务初始化 (Next.js + TypeScript)
-- [ ] updater 服务初始化 (Node.js + Dockerfile)
+- [x] updater 服务初始化 (Node.js + Dockerfile)
 - [ ] A/B 切换逻辑 (API /api/internal/update-notify)
+
 
 ### M2: 单点跳转闭环
 - [ ] postMessage 协议定义与类型共享
