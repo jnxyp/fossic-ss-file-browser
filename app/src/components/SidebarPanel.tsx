@@ -279,7 +279,7 @@ export default function SidebarPanel({ dataset }: { dataset: string }) {
                   <span className="tree-expand-icon" aria-hidden="true">
                     {isExpanded ? '▾' : '▸'}
                   </span>
-                  <span className="icon" aria-hidden="true">🗂</span>
+                  <span className="icon" aria-hidden="true">📦</span>
                   <span className="tree-node-name">{jar.name}</span>
                 </div>
 

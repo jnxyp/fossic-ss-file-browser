@@ -9,7 +9,7 @@ function formatRevision(revision: string): string {
     return '--';
   }
 
-  return revision.slice(0, 8);
+  return revision.slice(0, 7);
 }
 
 function formatDate(dateString: string): string {
@@ -71,13 +71,26 @@ export default function StatusFooterBar() {
     light: { icon: '☀', label: '浅色', next: 'dark' as const },
     dark: { icon: '☾', label: '深色', next: 'system' as const },
   }[currentTheme];
-
   const revision = manifest?.revision ?? '';
+  const revisionUrl = getRevisionUrl(revision);
+
   return (
     <footer className="status-footer">
       <div className="status-footer-meta">
         <span className="status-item">
-          版本 <strong>{formatRevision(manifest?.revision ?? '')}</strong>
+          来源版本{' '}
+          {revisionUrl ? (
+            <a
+              className="status-link"
+              href={revisionUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <strong>{formatRevision(revision)}</strong>
+            </a>
+          ) : (
+            <strong>{formatRevision(revision)}</strong>
+          )}
         </span>
         <span className="status-item">
           更新时间 <strong>{formatDate(manifest?.lastUpdated ?? '')}</strong>

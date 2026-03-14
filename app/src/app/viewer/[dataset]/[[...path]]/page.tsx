@@ -1,12 +1,12 @@
-'use client';
+﻿'use client';
 
-import { useEffect, useCallback, useState } from 'react';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import CodeViewer from '@/components/CodeViewer';
 import {
+  ALLOWED_ORIGINS,
   MessageType,
   PROTOCOL_NAME,
-  ALLOWED_ORIGINS,
   type AppMessage,
   type NavigatePayload,
 } from '@/lib/protocol';
@@ -21,7 +21,7 @@ interface ViewerState {
 }
 
 const INITIAL_STATE: ViewerState = {
-  code: '// 请在左侧选择文件包，或从 ParaTranz 发起导航请求',
+  code: '// 请在左侧选择文件，或从 ParaTranz 发起定位请求',
   lang: 'text',
   highlightLines: [],
   jarName: '',
@@ -41,11 +41,11 @@ export default function ViewerPage() {
   const jarName = pathSegments?.[0] ? decodeURIComponent(pathSegments[0]) : '';
   const className = pathSegments ? pathSegments.slice(1).join('/') : '';
 
-  // 有文件 URL 时初始就进入加载态，避免短暂闪出欢迎文字
   const [state, setState] = useState<ViewerState>(() => ({
     ...INITIAL_STATE,
-    loading: !!(pathSegments && pathSegments.length > 1),
+    loading: Boolean(pathSegments && pathSegments.length > 1),
   }));
+  const [copied, setCopied] = useState(false);
 
   const loadFile = useCallback(async (
     ds: string,
@@ -53,15 +53,17 @@ export default function ViewerPage() {
     cls: string,
     sid?: string,
   ) => {
-    if (!jar || !cls) return;
+    if (!jar || !cls) {
+      return;
+    }
 
     setState(prev => ({ ...prev, loading: true }));
 
-    const contentRes = await fetch(
+    const contentResponse = await fetch(
       `/api/files/content?dataset=${ds}&jar=${encodeURIComponent(jar)}&class=${encodeURIComponent(cls)}`
     );
 
-    if (!contentRes.ok) {
+    if (!contentResponse.ok) {
       setState(prev => ({
         ...prev,
         code: `// 错误：无法加载 ${jar} / ${cls}`,
@@ -74,43 +76,56 @@ export default function ViewerPage() {
       return;
     }
 
-    const { content } = await contentRes.json();
+    const { content } = await contentResponse.json();
     const lang = cls.endsWith('.java') || cls.endsWith('.class') ? 'java' : 'text';
 
     let highlightLines: number[] = [];
     if (sid) {
-      const idxRes = await fetch(
+      const indexResponse = await fetch(
         `/api/files/index?dataset=${ds}&jar=${encodeURIComponent(jar)}&class=${encodeURIComponent(cls)}&stringId=${encodeURIComponent(sid)}`
       );
-      if (idxRes.ok) {
-        const data = await idxRes.json();
+      if (indexResponse.ok) {
+        const data = await indexResponse.json();
         highlightLines = data.lines ?? [];
       }
     }
 
-    setState({ code: content, lang, highlightLines, jarName: jar, className: cls, loading: false });
+    setState({
+      code: content,
+      lang,
+      highlightLines,
+      jarName: jar,
+      className: cls,
+      loading: false,
+    });
   }, []);
 
   useEffect(() => {
     if (jarName && className) {
-      loadFile(dataset, jarName, className, stringId);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void loadFile(dataset, jarName, className, stringId);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataset, jarName, className, stringId]);
+  }, [className, dataset, jarName, loadFile, stringId]);
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (!ALLOWED_ORIGINS.includes(event.origin)) return;
-      const msg = event.data as AppMessage;
-      if (msg?.protocol !== PROTOCOL_NAME) return;
-      if (msg.type !== MessageType.PT_NAVIGATE_TO_STRING) return;
+      if (!ALLOWED_ORIGINS.includes(event.origin)) {
+        return;
+      }
 
-      const { dataset: ds, jarName: jar, className: cls, stringId: sid } =
-        msg.payload as NavigatePayload;
+      const message = event.data as AppMessage;
+      if (message?.protocol !== PROTOCOL_NAME) {
+        return;
+      }
 
-      const javaPath = cls.replace(/\.class$/, '.java');
+      if (message.type !== MessageType.PT_NAVIGATE_TO_STRING) {
+        return;
+      }
+
+      const payload = message.payload as NavigatePayload;
+      const javaPath = payload.className.replace(/\.class$/, '.java');
       router.push(
-        `/viewer/${ds}/${encodeURIComponent(jar)}/${javaPath}?stringId=${encodeURIComponent(sid)}`
+        `/viewer/${payload.dataset}/${encodeURIComponent(payload.jarName)}/${javaPath}?stringId=${encodeURIComponent(payload.stringId)}`
       );
     }
 
@@ -131,26 +146,63 @@ export default function ViewerPage() {
     return () => window.removeEventListener('message', handleMessage);
   }, [router]);
 
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setCopied(false), 1200);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  async function handleCopyLocator() {
+    if (!state.jarName || !state.className) {
+      return;
+    }
+
+    const normalizedClassName = state.className.replace(/\.java$/, '');
+    await navigator.clipboard.writeText(`${state.jarName}:${normalizedClassName}`);
+    setCopied(true);
+  }
+
+  const datasetLabel = dataset === 'original' ? '原文' : '译文';
+
   return (
     <>
       <header className="header">
         <div className="header-breadcrumb">
-          {state.jarName && <>
-            <span className="header-breadcrumb-jar">{state.jarName}</span>
-            <span className="header-breadcrumb-sep">›</span>
-          </>}
+          {state.jarName ? (
+            <>
+              <span className="header-breadcrumb-jar">{state.jarName}</span>
+              <span className="header-breadcrumb-sep">/</span>
+            </>
+          ) : null}
+
           <span className="header-breadcrumb-class">
             {state.className || '欢迎'}
           </span>
+
+          <button
+            type="button"
+            className={`copy-icon-button ${copied ? 'copied' : ''}`}
+            onClick={() => void handleCopyLocator()}
+            disabled={!state.jarName || !state.className}
+            title={copied ? '已复制' : '复制定位'}
+            aria-label={copied ? '已复制定位' : '复制定位'}
+          >
+            {copied ? '✓' : '⧉'}
+          </button>
         </div>
 
-        <span className={`dataset-badge ${dataset}`}>
-          {dataset.toUpperCase()}
-        </span>
+        <div className="header-actions">
+          <span className={`dataset-badge ${dataset}`}>
+            {datasetLabel}
+          </span>
+        </div>
       </header>
 
       <main className="code-container">
-        {state.loading && <div className="code-loading">加载中...</div>}
+        {state.loading ? <div className="code-loading">加载中...</div> : null}
         <CodeViewer
           code={state.code}
           lang={state.lang}

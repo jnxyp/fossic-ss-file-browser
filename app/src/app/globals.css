@@ -148,6 +148,13 @@ body,
   user-select: none;
 }
 
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 /* 代码容器 */
 .code-container {
   flex: 1;
@@ -283,9 +290,8 @@ body,
 }
 
 .tree-expand-icon {
-  width: 16px;
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-muted);
 }
 
@@ -356,6 +362,40 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.copy-icon-button {
+  width: 22px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.copy-icon-button:hover:not(:disabled) {
+  background: var(--button-bg);
+  border-color: var(--border-color);
+  color: var(--text-color);
+}
+
+.copy-icon-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.copy-icon-button.copied {
+  background: color-mix(in srgb, var(--accent-color) 14%, var(--button-bg) 86%);
+  border-color: color-mix(in srgb, var(--accent-color) 38%, var(--border-color) 62%);
+  color: var(--text-color);
 }
 
 .header-breadcrumb-loading {
@@ -535,14 +575,6 @@ body,
   transition: transform 260ms ease;
 }
 
-.theme-toggle:hover .theme-toggle-icon {
-  transform: rotate(-14deg) scale(1.08);
-}
-
-.theme-toggle:active .theme-toggle-icon {
-  transform: rotate(0deg) scale(0.96);
-}
-
 @media (max-width: 900px) {
   :root {
     --sidebar-width: 240px;
@@ -568,6 +600,7 @@ body,
   .dataset-tab,
   .tree-node,
   .dataset-badge,
+  .copy-icon-button,
   .code-viewer .highlighted-line,
   .theme-toggle,
   .theme-toggle-icon {
