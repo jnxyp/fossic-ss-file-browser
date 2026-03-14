@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import CodeViewer from '@/components/CodeViewer';
-import Sidebar from '@/components/Sidebar';
 import {
   MessageType,
   PROTOCOL_NAME,
@@ -11,7 +10,6 @@ import {
   type AppMessage,
   type NavigatePayload,
 } from '@/lib/protocol';
-import { useState } from 'react';
 
 interface ViewerState {
   code: string;
@@ -40,13 +38,15 @@ export default function ViewerPage() {
   const pathSegments = params.path as string[] | undefined;
   const stringId = searchParams.get('stringId') ?? undefined;
 
-  // 从 URL 推导当前文件
   const jarName = pathSegments?.[0] ? decodeURIComponent(pathSegments[0]) : '';
   const className = pathSegments ? pathSegments.slice(1).join('/') : '';
 
-  const [state, setState] = useState<ViewerState>(INITIAL_STATE);
+  // 有文件 URL 时初始就进入加载态，避免短暂闪出欢迎文字
+  const [state, setState] = useState<ViewerState>(() => ({
+    ...INITIAL_STATE,
+    loading: !!(pathSegments && pathSegments.length > 1),
+  }));
 
-  // 加载文件内容（+ 可选的行索引查询）
   const loadFile = useCallback(async (
     ds: string,
     jar: string,
@@ -91,7 +91,6 @@ export default function ViewerPage() {
     setState({ code: content, lang, highlightLines, jarName: jar, className: cls, loading: false });
   }, []);
 
-  // URL 变化时加载文件（侧边栏点击）
   useEffect(() => {
     if (jarName && className) {
       loadFile(dataset, jarName, className, stringId);
@@ -99,7 +98,6 @@ export default function ViewerPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataset, jarName, className, stringId]);
 
-  // postMessage 监听 + 发送 FB_READY
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (!ALLOWED_ORIGINS.includes(event.origin)) return;
@@ -110,9 +108,7 @@ export default function ViewerPage() {
       const { dataset: ds, jarName: jar, className: cls, stringId: sid } =
         msg.payload as NavigatePayload;
 
-      // 规范化为 .java 路径（CFR 反编译产物）
       const javaPath = cls.replace(/\.class$/, '.java');
-
       router.push(
         `/viewer/${ds}/${encodeURIComponent(jar)}/${javaPath}?stringId=${encodeURIComponent(sid)}`
       );
@@ -120,7 +116,6 @@ export default function ViewerPage() {
 
     window.addEventListener('message', handleMessage);
 
-    // 通知 ParaTranz 浏览器已就绪
     if (window.opener) {
       window.opener.postMessage(
         {
@@ -137,35 +132,31 @@ export default function ViewerPage() {
   }, [router]);
 
   return (
-    <div className="layout-container">
-      <Sidebar dataset={dataset} />
-
-      <div className="main-content">
-        <header className="header">
-          <div className="header-breadcrumb">
-            {state.jarName && <>
-              <span className="header-breadcrumb-jar">{state.jarName}</span>
-              <span className="header-breadcrumb-sep">›</span>
-            </>}
-            <span className="header-breadcrumb-class">
-              {state.className || '欢迎'}
-            </span>
-            {state.loading && <span className="header-breadcrumb-loading">⟳</span>}
-          </div>
-
-          <span className={`dataset-badge ${dataset}`}>
-            {dataset.toUpperCase()}
+    <>
+      <header className="header">
+        <div className="header-breadcrumb">
+          {state.jarName && <>
+            <span className="header-breadcrumb-jar">{state.jarName}</span>
+            <span className="header-breadcrumb-sep">›</span>
+          </>}
+          <span className="header-breadcrumb-class">
+            {state.className || '欢迎'}
           </span>
-        </header>
+        </div>
 
-        <main className="code-container">
-          <CodeViewer
-            code={state.code}
-            lang={state.lang}
-            highlightLines={state.highlightLines}
-          />
-        </main>
-      </div>
-    </div>
+        <span className={`dataset-badge ${dataset}`}>
+          {dataset.toUpperCase()}
+        </span>
+      </header>
+
+      <main className="code-container">
+        {state.loading && <div className="code-loading">加载中...</div>}
+        <CodeViewer
+          code={state.code}
+          lang={state.lang}
+          highlightLines={state.highlightLines}
+        />
+      </main>
+    </>
   );
 }

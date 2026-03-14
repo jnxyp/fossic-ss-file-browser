@@ -106,12 +106,14 @@
 - [ ] 版本信息展示 (基于 manifest.json)
 - [ ] 切换时的上下文保持逻辑
 
-### M4: 全自动更新
-- [ ] updater: GitHub 仓库同步逻辑
-- [ ] updater: 反编译与索引生成流水线
-- [ ] updater: A/B 目录轮转与更新通知
+### M4: 全自动更新 (已完成)
+- [x] updater: GitHub 仓库同步逻辑 (sparse checkout, git-sync.ts)
+- [x] updater: 反编译与索引生成流水线 (decompile.ts + packager.ts，CFR --outputzip + --outputstringindex)
+- [x] updater: A/B 目录轮转与更新通知 (manifest.ts flipSlot + notify.ts)
+- [x] updater: 全流程 Docker 验证（B 槽完整生成，manifest 切换正常）
+- [x] artifacts/ 运行时产物排除 git 追踪（artifacts/* + !artifacts/.gitkeep）
 
 ### M5: 扩展视图
 - [ ] CSV 表格只读视图
 - [ ] JSON/TXT 文本视图
-- [ ] Bookmarklet 状态条增强
+- [ ] Bookmarklet 状态条增强（自动开关、版本信息显示）
