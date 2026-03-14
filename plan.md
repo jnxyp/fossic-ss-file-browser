@@ -1,131 +1,181 @@
-# ss-file-browser 实施计划 (v2)
+# ss-file-browser 实施计划 (v3)
 
-## 1. 项目概况
-- **背景**：远行星号 (Starsector) 汉化工具链的一部分，辅助译者在 ParaTranz 查看代码/资源上下文。
-- **核心目标**：提供只读源码浏览器，实现从 ParaTranz 词条到反编译代码行的实时跳转（单向）。
-- **关键特性**：
-  - 基于 `window.open + postMessage` 与 ParaTranz 通信。
-  - 支持 **Original / Localized** 双数据集全量切换。
-  - 前端 SPA 架构，收到新定位请求后不刷新页面，仅更新状态与路由。
-  - 预留多文件类型（Java, CSV, JSON, TXT）扩展能力。
+## 1. 项目目标
+- 面向 Starsector 汉化工作流，提供一个只读源码浏览器。
+- 支持从 ParaTranz 词条直接跳到反编译后的 Java 源码行。
+- 支持原文 / 译文双视图切换，并尽量保持上下文不丢失。
+- 更新链路基于 GitHub 仓库和 CFR 反编译产物自动刷新。
 
-## 2. 系统架构与技术栈
-- **部署模型**：Docker Compose 部署，拆分为两个服务：
-  - `updater`：负责 Git 同步、CFR 反编译与索引产出。
-  - `app` (Next.js)：负责 Web UI、API 以及与 ParaTranz 的通信。
-- **共享存储**：通过 Docker Volume 共享 `artifacts/` 目录。
-- **开发语言**：全栈 TypeScript，共享类型 definition。
-- **核心组件**：
-  - 代码高亮：`Shiki` (浏览器端，`shiki/bundle/web`，按需加载 grammar)。
-  - 反编译器：`CFR` (Java)。
-- **前后端职责边界**：
-  - 后端 API 仅负责文件读取与索引查询，返回原始数据（代码字符串、索引条目）。
-  - 代码高亮、行定位、滚动等所有展示逻辑均在前端完成。
-  - Viewer 页面及所有展示组件为 Client Component，无 SSR。
+## 2. 当前架构
+- `app`
+  - Next.js 前端与 API。
+  - 负责文件树、源码内容、字符串索引查询、ParaTranz 通信。
+- `updater`
+  - 负责 Git 同步、CFR 反编译、生成 zip 与 `.strings.json` 聚合索引。
+- `artifacts`
+  - A/B 槽位产物目录。
+  - `manifest.json` 记录当前活动槽位、revision 与更新时间。
 
-## 3. 数据管理与更新 (A/B 全量切换)
-### 3.1 数据来源
-- 同步自 GitHub 仓库（包含所有原文/译文 JAR 及资源文件）。
-- 目录结构：`artifacts/A/` 与 `artifacts/B/`，每个线下包含 `original/` 与 `localization/` 子目录。
+## 3. 数据与更新
+### 3.1 现状
+- 已实现 A/B 全量切换。
+- 已实现 `manifest.json` 驱动的当前版本选择。
+- 已实现 `updater -> app` 的更新通知接口。
 
-### 3.2 更新流程
-1. `updater` 检查 GitHub 更新，获取最新 `commit SHA`。
-2. 识别当前“非激活”目录（由 `manifest.json` 指明）。
-3. 执行 Git Pull、CFR 反编译、生成 Zip 和 `.strings.json` 索引。
-4. 产物就绪后，`updater` 调用 `app` 的 `/api/internal/update-notify` 接口。
-5. `app` 收到通知后，更新内存中的 `current_path` 指针（指向新目录）并触发必要的索引重建。
-6. `app` 保持无状态设计，所有持久化配置仅存于 `manifest.json`。
+### 3.2 已落地细节
+- CFR 直接输出 zip，并生成每个类的 `*.strings.json`。
+- `packager.ts` 会把 zip 内 per-class 索引聚合成 jar 级 `.strings.json`，供 app 查询。
+- `updater` 现在在“首次启动”时会强制刷新一次，即使 revision 没变化也会重建产物。
+- 当前本地已经验证过新的 CFR 索引格式包含 `const_table` 字段。
 
-## 4. ParaTranz 集成方案
-### 4.1 Bookmarklet 注入与状态条
-- 用户通过浏览器书签加载 `/integration/paratranz-bookmarklet.js`。
-- **状态条 (Status Bar)**：注入后在 ParaTranz 右下角显示固定浮窗：
-  - **连接状态**：显示“已连接 / 未连接 / 查找中”。
-  - **版本信息**：显示当前数据集 Revision。
-  - **控制按钮**：提供“重开浏览器”按钮（解决窗口丢失问题）。
-  - **自动开关**：允许用户开启/关闭“跟随点击自动定位”。
+## 4. ParaTranz 联动
+### 4.1 已实现
+- 通过 bookmarklet 注入 `paratranz-bookmarklet.js`。
+- 仅允许在 `https://paratranz.cn/projects/3489` 下启动。
+- 使用 `window.open + postMessage` 与 viewer 通信。
+- 右下角紧凑状态条已支持：
+  - 连接状态
+  - 打开/重开窗口
+  - 关闭并完全退出脚本
+- 失去连接时只提示，不自动重开；用户手动点击按钮恢复。
+- bookmarklet 会从脚本自身 URL 推导 viewer 基址，不再只依赖硬编码 `localhost`。
 
-### 4.2 DOM 解析规则 (已冻结)
-- **主选择器**：`.context .well`。
-- **解析字段**：
-  - `jar`: 文件名 (e.g., `starfarer.api.jar`)
-  - `class`: 类路径 (e.g., `com/fs/.../FleetAssignment.class`)
-  - `const_no`: 转换为 `stringId` (格式: `#<utf8_index>`)
-- **兜底选择器**：`.context-tab` 及 `.string-list .row.string.active` 的 `title` 属性。
+### 4.2 当前 DOM 解析规则
+- 主要读取 `.context .well`。
+- 按固定字段解析：
+  - `文件：...jar`
+  - `类：...class`
+  - `常量号：....`
+- 发送给 viewer 的字段已统一为：
+  - `jarName`
+  - `className`
+  - `utf8ConstId`
 
-### 4.3 postMessage 协议 (v1)
-- **PT_NAVIGATE_TO_STRING**: ParaTranz -> Browser。
-  - `payload: { dataset, jarName, className, stringId }`
-- **FB_READY**: Browser -> ParaTranz。
-- **错误处理**: 明确 `CLASS_NOT_FOUND`, `STRING_NOT_FOUND` 等错误反馈。
+### 4.3 已修复的联动问题
+- 不再由 ParaTranz 指示原文 / 译文数据集，viewer 保持当前选择。
+- bookmarklet 收到 `FB_READY` 后只在首次握手或重连时自动跟随一次，避免用户手动点文件后又被拉回当前词条。
 
-## 5. 核心逻辑：定位约定
-- **定位键**：`className + utf8_index`（对应 `stringId` 的数值部分）。
-- **多重匹配**：若同一文件内存在多个相同 `utf8_index`，高亮所有候选行，默认滚动到第一个。
-- **视图切换**：切换 Original/Localized 时，优先保持 `className + utf8_index` 位置；失效则降级为同路径 + 近邻行号。
+## 5. Viewer 与导航
+### 5.1 已实现
+- Shiki 前端高亮。
+- 按 `utf8ConstId` 查询并高亮对应行。
+- 代码查看器会把 Java `\uXXXX` 转义显示为真实字符。
+- 顶部路径栏支持复制定位。
+- 数据集 badge 已中文化。
 
-## 6. 实施里程碑
-- **M1 (基座)**：完成 Docker 拓扑、A/B 目录结构、Next.js 基础 API。
-- **M2 (单点跳转)**：实现 `PT_NAVIGATE_TO_STRING` 定位闭环，支持 Java 高亮与滚动。
-- **M3 (双视图)**：支持双数据集无刷新切换，显示版本信息。
-- **M4 (全自动更新)**：打通 `updater` 通知机制与 GitHub 自动拉取。
-- **M5 (扩展视图)**：支持 CSV (Table View) 与 JSON 展示。
+### 5.2 内部类 / 常量表支持
+- 协议字段已从 `stringId` 全量切换到 `utf8ConstId`。
+- 新 CFR 索引支持 `const_table`：
+  - `""` 表示父类常量表
+  - `"$1"`、`"$Level1"` 之类表示内部类常量表
+- viewer 现已支持：
+  - 主路径固定为父类源码文件
+  - 通过查询参数 `subclass` 恢复目标内部类
+  - 后端读取父类源码文件
+  - 行号查询时按 `utf8ConstId + const_table` 精确筛选
+- 内部类路径如 `BaseSpecialItemPlugin$1.class` 现在会正确落到 `BaseSpecialItemPlugin.java` 并定位到对应内部类字符串行。
 
-## 7. 验收标准
-- 跳转请求响应时长 < 3s（本地网络/数据量下）。
-- `utf8_index` 映射准确，无漂移。
-- 更新任务执行期间，用户浏览不受影响。
-- Bookmarklet 状态条能准确恢复丢失的浏览器窗口连接。
+### 5.3 当前 URL 约定
+- 主路径始终使用父类源码路径。
+- 查询参数包含：
+  - `utf8ConstId`
+  - `subclass`，例如 `1`、`Level1`
+- 仅在需要时附加 `scrollTreeToCurrent=1`，用于驱动文件树自动滚动到当前条目。
 
-## 8. 实现进度表 (Checklist)
+## 6. 侧栏文件树
+### 6.1 已实现
+- 文件树 API 与 UI 已可稳定浏览 jar 内 `.java` 文件。
+- API 对外统一使用 `.jar` 语义，内部自动映射到 `.zip` 产物。
+- 文件树现在会在 ParaTranz 导航后：
+  - 先折叠之前展开的路径
+  - 再只展开当前 jar 与当前文件目录链
+  - 自动把当前条目滚到视野内，且尽量靠近顶部
+- 原文 / 译文切换时保留当前路径上下文。
+- 用户手动点击文件树项目时：
+  - 不会再被 ParaTranz 当前词条立即拉回
+  - 不会触发自动滚动到当前条目
 
-### M1: 基座搭建 (已完成)
-- [x] Git 仓库初始化与 .gitignore 配置
-- [x] 基础目录结构 (app, updater, artifacts, tools)
-- [x] A/B 存储结构与 manifest.json 初始定义
-- [x] docker-compose.yml 基础拓扑定义
-- [x] 反编译器 (cfr.jar) 就位
-- [x] app 服务初始化 (Next.js + TypeScript)
-- [x] updater 服务初始化 (Node.js + Dockerfile)
-- [x] A/B 切换逻辑 (API /api/internal/update-notify)
+### 6.2 近期新增细节
+- 侧栏宽度已支持拖拽调整。
+- 宽度会持久化到 `localStorage`。
+- 首帧使用默认宽度，挂载后恢复用户宽度，已规避 hydration mismatch。
+- tree 区域支持横向滚动。
+- 文件 / 文件夹 / jar 名称有最大显示宽度限制。
+- 完整路径或名称通过 tooltip 展示。
 
+## 7. 主题与界面
+### 7.1 已实现
+- 接入 `next-themes`。
+- 支持浅色 / 深色 / 跟随系统三态主题。
+- 代码高亮主题会随 UI 主题切换。
+- 底栏已显示：
+  - 版本号
+  - 更新时间
+  - GitHub commit 链接
+  - 单按钮主题轮换
+- 顶部和底部部分交互已加轻量动画。
+- `devIndicators: false` 已关闭。
 
-### M2: 单点跳转与基础浏览 (已完成)
-- [x] postMessage 协议定义与类型共享
-- [x] 目录扫描与文件树 API 实现
-- [x] 侧边栏文件树 UI 组件
-- [x] 后端 API 重构：`/api/files/content` 与 `/api/files/index`（按 class 粒度返回原始数据）
-- [x] Viewer 页面改为 Client Component，Shiki 移至前端高亮
-- [x] Bookmarklet 基础版：DOM 解析 + postMessage 发送 + 状态条（连接状态 + 重开按钮）
-- [x] postMessage 监听与路由跳转
-- [x] className + utf8_index 定位、行高亮与自动滚动
+### 7.2 已优化
+- 顶部路径栏简化。
+- 复制按钮改为图标按钮。
+- 中文文案统一替换了大部分英文标识。
+- 去掉了代码跳转时的平滑滚动，改为直接定位。
 
+## 8. 里程碑状态
+### M1: 基础设施
+- [x] 仓库与目录结构建立
+- [x] app / updater 初始化
+- [x] artifacts A/B 槽位结构
+- [x] 基础 Docker / manifest / update-notify 机制
 
-### M3: 双视图与版本管理 (已完成)
-- [x] Original / Localized 视图切换 UI
-- [x] 版本信息展示 (基于 manifest.json)
-- [x] 切换时的上下文保持逻辑
+### M2: 单点跳转与基础浏览
+- [x] 文件树 API 与源码内容 API
+- [x] 前端代码高亮与行高亮
+- [x] bookmarklet 注入与基础 postMessage 协议
+- [x] ParaTranz -> viewer 单向跳转闭环
+- [x] `utf8ConstId` 定位与多行高亮
+- [x] 内部类 / `const_table` 精确定位
 
-### M4: 全自动更新 (已完成)
-- [x] updater: GitHub 仓库同步逻辑 (sparse checkout, git-sync.ts)
-- [x] updater: 反编译与索引生成流水线 (decompile.ts + packager.ts，CFR --outputzip + --outputstringindex)
-- [x] updater: A/B 目录轮转与更新通知 (manifest.ts flipSlot + notify.ts)
-- [x] updater: 全流程 Docker 验证（B 槽完整生成，manifest 切换正常）
-- [x] artifacts/ 运行时产物排除 git 追踪（artifacts/* + !artifacts/.gitkeep）
+### M3: 双视图与版本信息
+- [x] 原文 / 译文切换
+- [x] 底栏版本信息展示
+- [x] 版本号 GitHub commit 链接
+- [x] 切换时保留上下文
+
+### M4: 自动更新
+- [x] GitHub 同步
+- [x] CFR 反编译与聚合索引生成
+- [x] A/B 轮转
+- [x] 启动时强制刷新一次
 
 ### M5: 扩展视图
 - [ ] CSV 表格只读视图
-- [ ] JSON/TXT 文本视图
-- [ ] Bookmarklet 状态条增强（自动开关、版本信息显示）
+- [ ] JSON/TXT 只读视图
+- [ ] 非 Java 文件的专门展示策略
 
-## 9. 最近更新
-- [x] 接入 `next-themes`，支持浅色 / 深色 / 跟随系统三态主题切换
-- [x] 代码高亮主题随 UI 主题联动切换
-- [x] Viewer 底部新增状态栏，显示版本号与更新时间
-- [x] 版本号增加 GitHub commit 链接
-- [x] 关闭 Next.js 开发环境右下角 `devIndicators`
-- [x] 文件树侧栏底部版本信息移除，状态信息统一收敛到底栏
+## 9. 最近几次提交落地内容
+- `6e42e63` `feat: add theme switcher and status footer`
+  - 接入主题系统与底栏状态栏。
+- `81e4a8c` `feat: polish theme toggle interactions`
+  - 优化主题切换交互、按钮动画与 plan 同步。
+- `05bc118` `refactor: simplify viewer header and component layout`
+  - 精简查看器头部，清理旧组件。
+- `9282384` `fix: tighten protocol and resolver types`
+  - 收紧协议与 resolver 类型。
+- `18dac53` `feat: update bookmarklet and API to use utf8ConstId instead of stringId`
+  - 将 `stringId` 全量切换为 `utf8ConstId`。
+- `87736e4` `feat: support const table aware string navigation`
+  - 接入新 CFR、首次强制刷新、`const_table` 感知导航。
+- `b012a5e` `fix: keep viewer stable for inner class navigation`
+  - 父类主路径 + `subclass` 参数，稳定内部类跳转。
+- `2d18436` `fix: polish sidebar navigation behavior`
+  - 修复文件树导航行为、自动展开、宽度拖拽、tooltip 与横向滚动。
 
 ## 10. 当前优先级
-- `M5` 扩展视图暂缓实现，作为未来功能保留。
-- 当前开发重点切换为 ParaTranz 联动体验完善，包括 bookmarklet 注入脚本、连接状态提示、手动重开浏览器和版本信息透出。
+- `M5` 暂缓，保留为未来功能。
+- 当前重点仍是 ParaTranz 联动体验完善与 viewer 稳定性打磨。
+- 下一步更值得继续补的方向：
+  - bookmarklet DOM 解析兜底选择器
+  - 更细的错误反馈
+  - 真实用户流程下的回归测试
