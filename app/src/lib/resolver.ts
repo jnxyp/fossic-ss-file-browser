@@ -3,6 +3,13 @@ import path from 'path';
 import fs from 'fs';
 import { getArtifactsPath } from './manifest';
 
+interface StringIndexEntry {
+  utf8_index: number;
+  line: number;
+}
+
+type StringIndexData = Record<string, StringIndexEntry[]>;
+
 /**
  * 从 Zip 包中读取指定文件的内容
  * @param jarName Jar/Zip 文件名 (例如 starfarer.api.jar)
@@ -66,7 +73,7 @@ export async function findLinesByStringId(
 
   try {
     const content = fs.readFileSync(indexFile, 'utf-8');
-    const indexData = JSON.parse(content);
+    const indexData = JSON.parse(content) as StringIndexData;
 
     const utf8Index = parseInt(stringId.replace('#', ''), 10);
     const normalizedClass = className.replace(/\.(class|java)$/, '');
@@ -76,8 +83,8 @@ export async function findLinesByStringId(
 
     // 返回所有匹配该 utf8_index 的行号
     return fileEntries
-      .filter((e: any) => e.utf8_index === utf8Index)
-      .map((e: any) => e.line);
+      .filter(entry => entry.utf8_index === utf8Index)
+      .map(entry => entry.line);
   } catch (error) {
     console.error('查询索引失败:', error);
     return [];

@@ -66,7 +66,7 @@ export interface NavigatePayload {
 export interface ErrorPayload {
   code: ErrorCode;
   message: string;
-  detail?: any;
+  detail?: unknown;
 }
 
 /**
