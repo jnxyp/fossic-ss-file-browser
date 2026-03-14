@@ -66,11 +66,34 @@ body {
   background-image:
     radial-gradient(circle at top left, rgba(105, 183, 255, 0.08), transparent 28%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 28%);
+  transition:
+    background-color 220ms ease,
+    color 220ms ease,
+    background-image 280ms ease;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+body,
+.sidebar,
+.main-content,
+.header,
+.code-container,
+.status-footer,
+.dataset-tab,
+.tree-node,
+.dataset-badge,
+.code-viewer .highlighted-line,
+.theme-toggle {
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease,
+    box-shadow 220ms ease,
+    transform 180ms ease;
 }
 
 .app-shell {
@@ -444,9 +467,20 @@ a {
   font-weight: 600;
 }
 
+.status-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.status-link:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .theme-toggle {
   height: 24px;
   padding: 0 10px;
+  width: calc(22px + 4.4em + 20px);
   border: 1px solid var(--border-color);
   border-radius: 999px;
   background: var(--button-bg);
@@ -457,10 +491,35 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    width 240ms ease,
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease,
+    box-shadow 220ms ease,
+    transform 180ms ease;
+}
+
+.theme-toggle-light,
+.theme-toggle-dark {
+  width: calc(22px + 2.2em + 20px);
+}
+
+.theme-toggle-system {
+  width: calc(22px + 4.4em + 20px);
 }
 
 .theme-toggle:hover {
   background: var(--button-hover-bg);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.theme-toggle:active {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .theme-toggle.active {
@@ -472,6 +531,16 @@ a {
 .theme-toggle-icon {
   font-size: 12px;
   line-height: 1;
+  flex-shrink: 0;
+  transition: transform 260ms ease;
+}
+
+.theme-toggle:hover .theme-toggle-icon {
+  transform: rotate(-14deg) scale(1.08);
+}
+
+.theme-toggle:active .theme-toggle-icon {
+  transform: rotate(0deg) scale(0.96);
 }
 
 @media (max-width: 900px) {
@@ -487,4 +556,21 @@ a {
     gap: 8px;
   }
 
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body,
+  .sidebar,
+  .main-content,
+  .header,
+  .code-container,
+  .status-footer,
+  .dataset-tab,
+  .tree-node,
+  .dataset-badge,
+  .code-viewer .highlighted-line,
+  .theme-toggle,
+  .theme-toggle-icon {
+    transition: none !important;
+  }
 }

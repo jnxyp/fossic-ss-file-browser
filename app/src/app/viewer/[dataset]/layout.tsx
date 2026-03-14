@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import SidebarPanel from '@/components/SidebarPanel';
-import StatusFooterBar from '@/components/StatusFooterBar';
+import StatusFooterBarV2 from '@/components/StatusFooterBarV2';
 
 export default function ViewerLayout({ children }: { children: React.ReactNode }) {
   const params = useParams();
@@ -16,7 +16,7 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
           {children}
         </div>
       </div>
-      <StatusFooterBar />
+      <StatusFooterBarV2 />
     </div>
   );
 }

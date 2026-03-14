@@ -30,6 +30,14 @@ function formatDate(dateString: string): string {
   }
 }
 
+function getRevisionUrl(revision: string): string | null {
+  if (!revision || revision === 'initial') {
+    return null;
+  }
+
+  return `https://github.com/TruthOriginem/Starsector-Localization-CN/commit/${revision}`;
+}
+
 export default function StatusFooterBar() {
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -64,6 +72,7 @@ export default function StatusFooterBar() {
     dark: { icon: '☾', label: '深色', next: 'system' as const },
   }[currentTheme];
 
+  const revision = manifest?.revision ?? '';
   return (
     <footer className="status-footer">
       <div className="status-footer-meta">
@@ -77,7 +86,7 @@ export default function StatusFooterBar() {
 
       <button
         type="button"
-        className="theme-toggle active"
+        className={`theme-toggle active theme-toggle-${currentTheme}`}
         onClick={() => setTheme(themeState.next)}
         aria-label={`当前主题：${themeState.label}`}
       >

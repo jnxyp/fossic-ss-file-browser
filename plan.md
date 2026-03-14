@@ -101,10 +101,10 @@
 - [x] className + utf8_index 定位、行高亮与自动滚动
 
 
-### M3: 双视图与版本管理
-- [ ] Original / Localized 视图切换 UI
-- [ ] 版本信息展示 (基于 manifest.json)
-- [ ] 切换时的上下文保持逻辑
+### M3: 双视图与版本管理 (已完成)
+- [x] Original / Localized 视图切换 UI
+- [x] 版本信息展示 (基于 manifest.json)
+- [x] 切换时的上下文保持逻辑
 
 ### M4: 全自动更新 (已完成)
 - [x] updater: GitHub 仓库同步逻辑 (sparse checkout, git-sync.ts)
@@ -117,3 +117,11 @@
 - [ ] CSV 表格只读视图
 - [ ] JSON/TXT 文本视图
 - [ ] Bookmarklet 状态条增强（自动开关、版本信息显示）
+
+## 9. 最近更新
+- [x] 接入 `next-themes`，支持浅色 / 深色 / 跟随系统三态主题切换
+- [x] 代码高亮主题随 UI 主题联动切换
+- [x] Viewer 底部新增状态栏，显示版本号与更新时间
+- [x] 版本号增加 GitHub commit 链接
+- [x] 关闭 Next.js 开发环境右下角 `devIndicators`
+- [x] 文件树侧栏底部版本信息移除，状态信息统一收敛到底栏
