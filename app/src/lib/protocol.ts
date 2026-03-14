@@ -54,7 +54,6 @@ export interface BaseMessage {
  * 导航请求消息负载
  */
 export interface NavigatePayload {
-  dataset: DatasetType;
   jarName: string;     // 例如 starfarer.api.jar
   className: string;   // 例如 com/fs/starfarer/api/impl/campaign/FleetAssignment (路径格式)
   utf8ConstId: string; // 例如 #160 (对应 utf8_index)

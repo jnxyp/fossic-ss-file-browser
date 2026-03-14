@@ -38,15 +38,15 @@ function getRevisionUrl(revision: string): string | null {
   return `https://github.com/TruthOriginem/Starsector-Localization-CN/commit/${revision}`;
 }
 
+const THEME_STATE_MAP = {
+  system: { icon: '◐', label: '跟随系统', next: 'light' as const },
+  light: { icon: '☀', label: '浅色', next: 'dark' as const },
+  dark: { icon: '☾', label: '深色', next: 'system' as const },
+} as const;
+
 export default function StatusFooterBar() {
   const [manifest, setManifest] = useState<Manifest | null>(null);
-  const [mounted, setMounted] = useState(false);
   const { theme, setTheme } = useTheme();
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     async function fetchManifest() {
@@ -62,15 +62,11 @@ export default function StatusFooterBar() {
       }
     }
 
-    fetchManifest();
+    void fetchManifest();
   }, []);
 
-  const currentTheme = mounted ? (theme ?? 'system') : 'system';
-  const themeState = {
-    system: { icon: '◐', label: '跟随系统', next: 'light' as const },
-    light: { icon: '☀', label: '浅色', next: 'dark' as const },
-    dark: { icon: '☾', label: '深色', next: 'system' as const },
-  }[currentTheme];
+  const currentTheme = theme ?? 'system';
+  const themeState = THEME_STATE_MAP[currentTheme as keyof typeof THEME_STATE_MAP] ?? THEME_STATE_MAP.system;
   const revision = manifest?.revision ?? '';
   const revisionUrl = getRevisionUrl(revision);
 
@@ -78,7 +74,7 @@ export default function StatusFooterBar() {
     <footer className="status-footer">
       <div className="status-footer-meta">
         <span className="status-item">
-          来源版本{' '}
+          版本{' '}
           {revisionUrl ? (
             <a
               className="status-link"

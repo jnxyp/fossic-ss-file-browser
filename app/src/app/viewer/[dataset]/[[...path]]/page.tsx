@@ -29,6 +29,10 @@ const INITIAL_STATE: ViewerState = {
   loading: false,
 };
 
+function normalizeClassPath(className: string) {
+  return className.replace(/\$[^/]+(?=\.class$|\.java$)/, '');
+}
+
 export default function ViewerPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -39,7 +43,10 @@ export default function ViewerPage() {
   const utf8ConstId = searchParams.get('utf8ConstId') ?? undefined;
 
   const jarName = pathSegments?.[0] ? decodeURIComponent(pathSegments[0]) : '';
-  const className = pathSegments ? pathSegments.slice(1).join('/') : '';
+  const targetClassName = pathSegments
+    ? pathSegments.slice(1).map(segment => decodeURIComponent(segment)).join('/')
+    : '';
+  const sourceClassName = targetClassName ? normalizeClassPath(targetClassName) : '';
 
   const [state, setState] = useState<ViewerState>(() => ({
     ...INITIAL_STATE,
@@ -50,39 +57,40 @@ export default function ViewerPage() {
   const loadFile = useCallback(async (
     ds: string,
     jar: string,
-    cls: string,
+    sourceCls: string,
+    targetCls: string,
     targetUtf8ConstId?: string,
   ) => {
-    if (!jar || !cls) {
+    if (!jar || !sourceCls || !targetCls) {
       return;
     }
 
     setState(prev => ({ ...prev, loading: true }));
 
     const contentResponse = await fetch(
-      `/api/files/content?dataset=${ds}&jar=${encodeURIComponent(jar)}&class=${encodeURIComponent(cls)}`
+      `/api/files/content?dataset=${ds}&jar=${encodeURIComponent(jar)}&class=${encodeURIComponent(sourceCls)}`
     );
 
     if (!contentResponse.ok) {
       setState(prev => ({
         ...prev,
-        code: `// 错误：无法加载 ${jar} / ${cls}`,
+        code: `// 错误：无法加载 ${jar} / ${sourceCls}`,
         lang: 'text',
         highlightLines: [],
         jarName: jar,
-        className: cls,
+        className: targetCls,
         loading: false,
       }));
       return;
     }
 
     const { content } = await contentResponse.json();
-    const lang = cls.endsWith('.java') || cls.endsWith('.class') ? 'java' : 'text';
+    const lang = sourceCls.endsWith('.java') || sourceCls.endsWith('.class') ? 'java' : 'text';
 
     let highlightLines: number[] = [];
     if (targetUtf8ConstId) {
       const indexResponse = await fetch(
-        `/api/files/index?dataset=${ds}&jar=${encodeURIComponent(jar)}&class=${encodeURIComponent(cls)}&utf8ConstId=${encodeURIComponent(targetUtf8ConstId)}`
+        `/api/files/index?dataset=${ds}&jar=${encodeURIComponent(jar)}&class=${encodeURIComponent(targetCls)}&utf8ConstId=${encodeURIComponent(targetUtf8ConstId)}`
       );
       if (indexResponse.ok) {
         const data = await indexResponse.json();
@@ -95,17 +103,17 @@ export default function ViewerPage() {
       lang,
       highlightLines,
       jarName: jar,
-      className: cls,
+      className: targetCls,
       loading: false,
     });
   }, []);
 
   useEffect(() => {
-    if (jarName && className) {
+    if (jarName && sourceClassName && targetClassName) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      void loadFile(dataset, jarName, className, utf8ConstId);
+      void loadFile(dataset, jarName, sourceClassName, targetClassName, utf8ConstId);
     }
-  }, [className, dataset, jarName, loadFile, utf8ConstId]);
+  }, [dataset, jarName, loadFile, sourceClassName, targetClassName, utf8ConstId]);
 
   useEffect(() => {
     async function sendReadyMessage() {
@@ -157,7 +165,7 @@ export default function ViewerPage() {
       const payload = message.payload as NavigatePayload;
       const javaPath = payload.className.replace(/\.class$/, '.java');
       router.push(
-        `/viewer/${payload.dataset}/${encodeURIComponent(payload.jarName)}/${javaPath}?utf8ConstId=${encodeURIComponent(payload.utf8ConstId)}`
+        `/viewer/${dataset}/${encodeURIComponent(payload.jarName)}/${javaPath}?utf8ConstId=${encodeURIComponent(payload.utf8ConstId)}`
       );
     }
 

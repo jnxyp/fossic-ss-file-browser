@@ -10,6 +10,12 @@ interface CodeViewerProps {
   highlightLines?: number[];
 }
 
+function decodeJavaUnicodeEscapes(input: string) {
+  return input.replace(/\\u+([0-9a-fA-F]{4})/g, (_, hex: string) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+}
+
 // 模块级单例：避免每次渲染都重新初始化 Shiki（包含 WASM，初始化较慢）
 let highlighterPromise: Promise<Highlighter> | null = null;
 
@@ -28,6 +34,7 @@ export default function CodeViewer({ code, lang = 'java', highlightLines = [] }:
   const [html, setHtml] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const { resolvedTheme } = useTheme();
+  const displayCode = lang === 'java' ? decodeJavaUnicodeEscapes(code) : code;
 
   useEffect(() => {
     let cancelled = false;
@@ -41,7 +48,7 @@ export default function CodeViewer({ code, lang = 'java', highlightLines = [] }:
 
       const theme = resolvedTheme === 'light' ? 'github-light' : 'github-dark';
 
-      const result = h.codeToHtml(code, {
+      const result = h.codeToHtml(displayCode, {
         lang: safeLang,
         theme,
         transformers: highlightLines.length > 0
@@ -64,7 +71,7 @@ export default function CodeViewer({ code, lang = 'java', highlightLines = [] }:
 
     highlight();
     return () => { cancelled = true; };
-  }, [code, highlightLines, lang, resolvedTheme]);
+  }, [displayCode, highlightLines, lang, resolvedTheme]);
 
   // 高亮完成后滚动到第一个目标行
   useEffect(() => {
@@ -78,7 +85,7 @@ export default function CodeViewer({ code, lang = 'java', highlightLines = [] }:
       ref={containerRef}
       className="code-viewer"
       dangerouslySetInnerHTML={{
-        __html: html || `<pre style="padding:1.5rem;color:#8b949e;font-size:13px;font-family:monospace">${code}</pre>`,
+        __html: html || `<pre style="padding:1.5rem;color:#8b949e;font-size:13px;font-family:monospace">${displayCode}</pre>`,
       }}
     />
   );

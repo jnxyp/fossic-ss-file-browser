@@ -213,10 +213,6 @@
     };
   }
 
-  function getActiveDataset() {
-    return 'localization';
-  }
-
   function triggerNavigate() {
     if (!autoFollow) {
       return;
@@ -228,7 +224,6 @@
     }
 
     sendNavigate({
-      dataset: getActiveDataset(),
       jarName: entry.jarName,
       className: entry.className,
       utf8ConstId: entry.utf8ConstId,
