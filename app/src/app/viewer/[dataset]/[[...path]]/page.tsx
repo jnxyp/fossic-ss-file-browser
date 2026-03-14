@@ -142,26 +142,20 @@ export default function ViewerPage() {
 
       <div className="main-content">
         <header className="header">
-          <div style={{ fontSize: '14px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ opacity: 0.5 }}>{state.jarName}</span>
-            {state.className && <span style={{ opacity: 0.5 }}>/</span>}
-            <span style={{ color: 'var(--accent-color)' }}>{state.className}</span>
-            {state.loading && (
-              <span style={{ opacity: 0.4, fontSize: '12px' }}>加载中...</span>
-            )}
+          <div className="header-breadcrumb">
+            {state.jarName && <>
+              <span className="header-breadcrumb-jar">{state.jarName}</span>
+              <span className="header-breadcrumb-sep">›</span>
+            </>}
+            <span className="header-breadcrumb-class">
+              {state.className || '欢迎'}
+            </span>
+            {state.loading && <span className="header-breadcrumb-loading">⟳</span>}
           </div>
 
-          <div style={{
-            fontSize: '11px',
-            padding: '4px 10px',
-            borderRadius: '12px',
-            background: dataset === 'original' ? '#30363d' : '#23863633',
-            color: dataset === 'original' ? '#c9d1d9' : '#3fb950',
-            border: '1px solid #30363d',
-            fontWeight: 600,
-          }}>
+          <span className={`dataset-badge ${dataset}`}>
             {dataset.toUpperCase()}
-          </div>
+          </span>
         </header>
 
         <main className="code-container">

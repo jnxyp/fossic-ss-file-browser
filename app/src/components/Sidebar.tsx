@@ -41,24 +41,14 @@ export default function Sidebar({ dataset }: { dataset: string }) {
 
   return (
     <aside className="sidebar">
-      <div style={{ 
-        padding: '1.2rem 1.5rem', 
-        borderBottom: '1px solid var(--border-color)', 
-        fontWeight: 600,
-        fontSize: '14px',
-        color: 'var(--text-color)'
-      }}>
+      <div className="sidebar-title">
         文件树
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 0' }}>
+      <div className="sidebar-tree">
         {loading ? (
-          <div style={{ padding: '1rem 1.5rem', fontSize: '12px', opacity: 0.5 }}>
-            正在扫描产物...
-          </div>
+          <div className="sidebar-hint">正在扫描产物...</div>
         ) : tree.length === 0 ? (
-          <div style={{ padding: '1rem 1.5rem', fontSize: '12px', opacity: 0.5 }}>
-            暂无产物数据
-          </div>
+          <div className="sidebar-hint">暂无产物数据</div>
         ) : (
           tree.map((node) => {
             // 基础跳转路径：/viewer/[dataset]/[jarName]
@@ -76,9 +66,7 @@ export default function Sidebar({ dataset }: { dataset: string }) {
                 <span className="icon">
                   {node.type === 'jar' ? '📦' : '📄'}
                 </span>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {node.name}
-                </span>
+                <span className="tree-node-name">{node.name}</span>
               </Link>
             );
           })
