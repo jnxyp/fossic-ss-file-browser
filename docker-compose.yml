@@ -1,0 +1,31 @@
+services:
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./artifacts:/app/artifacts
+    environment:
+      - DATA_ROOT=/app/artifacts
+      - NODE_ENV=production
+    networks:
+      - ss-network
+
+  updater:
+    build:
+      context: ./updater
+      dockerfile: Dockerfile
+    volumes:
+      - ./artifacts:/app/artifacts
+    environment:
+      - DATA_ROOT=/app/artifacts
+      - APP_INTERNAL_URL=http://app:3000
+      - SYNC_INTERVAL=21600
+    networks:
+      - ss-network
+
+networks:
+  ss-network:
+    driver: bridge
