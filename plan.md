@@ -75,7 +75,7 @@
 
 ## 8. 实现进度表 (Checklist)
 
-### M1: 基座搭建 (进行中)
+### M1: 基座搭建 (已完成)
 - [x] Git 仓库初始化与 .gitignore 配置
 - [x] 基础目录结构 (app, updater, artifacts, tools)
 - [x] A/B 存储结构与 manifest.json 初始定义
@@ -83,7 +83,7 @@
 - [x] 反编译器 (cfr.jar) 就位
 - [x] app 服务初始化 (Next.js + TypeScript)
 - [x] updater 服务初始化 (Node.js + Dockerfile)
-- [ ] A/B 切换逻辑 (API /api/internal/update-notify)
+- [x] A/B 切换逻辑 (API /api/internal/update-notify)
 
 
 ### M2: 单点跳转闭环
