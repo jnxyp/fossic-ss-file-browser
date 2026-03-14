@@ -111,10 +111,49 @@ body,
   width: 100vw;
 }
 
-/* 侧边栏 */
-.sidebar {
+.sidebar-shell {
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
+  flex: 0 0 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.sidebar-resizer {
+  width: 6px;
+  flex: 0 0 auto;
+  cursor: col-resize;
+  position: relative;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 2px,
+      var(--border-color) 2px,
+      var(--border-color) 4px,
+      transparent 4px,
+      transparent 100%
+    );
+}
+
+.sidebar-resizer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: color-mix(in srgb, var(--accent-color) 16%, transparent);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.sidebar-resizer:hover::before,
+.sidebar-resizer:active::before {
+  opacity: 1;
+}
+
+/* 侧边栏 */
+.sidebar {
+  width: 100%;
+  min-width: 0;
   background-color: var(--sidebar-bg);
   border-right: 1px solid var(--border-color);
   display: flex;
@@ -239,7 +278,7 @@ body,
 /* 侧边栏树容器 */
 .sidebar-tree {
   flex: 1;
-  overflow-y: auto;
+  overflow: auto;
   padding: 4px 0;
 }
 
@@ -253,14 +292,14 @@ body,
 .tree-node {
   cursor: pointer;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font-size: 13px;
   line-height: 22px;
   color: var(--text-color);
   display: flex;
   align-items: center;
   gap: 6px;
+  width: max-content;
+  min-width: 100%;
 }
 
 .tree-node:hover {
@@ -282,6 +321,7 @@ body,
 .tree-node-name {
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: min(28ch, 100%);
 }
 
 .tree-node-jar {
@@ -291,13 +331,15 @@ body,
 
 .tree-expand-icon {
   flex-shrink: 0;
-  font-size: 16px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
 /* jar 展开后的子树容器 */
 .tree-jar-children {
   padding-left: 8px;
+  width: max-content;
+  min-width: 100%;
 }
 
 /* 包目录节点 */
@@ -317,6 +359,8 @@ body,
   margin-left: 5px;
   padding-left: 5px;
   border-left: 1px solid var(--border-color);
+  width: max-content;
+  min-width: 100%;
 }
 
 /* class 文件节点 */
@@ -578,6 +622,10 @@ body,
 @media (max-width: 900px) {
   :root {
     --sidebar-width: 240px;
+  }
+
+  .sidebar-resizer {
+    width: 4px;
   }
 
   .status-footer {

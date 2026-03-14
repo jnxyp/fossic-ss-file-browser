@@ -200,6 +200,7 @@ export default function ViewerPage() {
       const targetJavaPath = payload.className.replace(/\.class$/, '.java');
       const query = new URLSearchParams({
         utf8ConstId: payload.utf8ConstId,
+        scrollTreeToCurrent: '1',
       });
       const subclassSuffix = getSubclassSuffix(targetJavaPath);
       if (subclassSuffix) {
@@ -258,8 +259,8 @@ export default function ViewerPage() {
             className={`copy-icon-button ${copied ? 'copied' : ''}`}
             onClick={() => void handleCopyLocator()}
             disabled={!state.jarName || !state.className}
-            title={copied ? '已复制' : '复制定位'}
-            aria-label={copied ? '已复制定位' : '复制定位'}
+            title={copied ? '已复制' : '复制类名'}
+            aria-label={copied ? '已复制类名' : '复制类名'}
           >
             {copied ? '✓' : '⧉'}
           </button>

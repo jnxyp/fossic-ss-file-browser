@@ -58,6 +58,19 @@ function buildFileTree(files: string[]): TreeNode[] {
   return root;
 }
 
+function getExpandedDirSet(className: string) {
+  const parts = className.split('/');
+  const dirs: string[] = [];
+  let current = '';
+
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    current = current ? `${current}/${parts[index]}` : parts[index];
+    dirs.push(current);
+  }
+
+  return new Set(dirs);
+}
+
 function TreeItem({
   node,
   dataset,
@@ -93,13 +106,17 @@ function TreeItem({
 
   return (
     <div>
-      <div className="tree-node tree-node-dir" onClick={() => onToggleDir(node.path)}>
+      <div
+        className="tree-node tree-node-dir"
+        onClick={() => onToggleDir(node.path)}
+        title={node.path}
+      >
         <span className="tree-expand-icon" aria-hidden="true">
-          {isExpanded ? '▾' : '▸'}
+          {isExpanded ? '▼' : '▶'}
         </span>
         <span className="tree-node-name">{node.name}</span>
       </div>
-      {isExpanded && (
+      {isExpanded ? (
         <div className="tree-dir-children">
           {node.children.map(child => (
             <TreeItem
@@ -113,7 +130,7 @@ function TreeItem({
             />
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -123,9 +140,12 @@ export default function SidebarPanel({ dataset }: { dataset: string }) {
   const searchParams = useSearchParams();
   const pathSegments = params.path as string[] | undefined;
   const jarName = pathSegments?.[0] ? decodeURIComponent(pathSegments[0]) : '';
-  const className = pathSegments ? pathSegments.slice(1).join('/') : '';
+  const className = pathSegments
+    ? pathSegments.slice(1).map(segment => decodeURIComponent(segment)).join('/')
+    : '';
   const utf8ConstId = searchParams.get('utf8ConstId') ?? undefined;
   const subclass = searchParams.get('subclass') ?? undefined;
+  const scrollTreeToCurrent = searchParams.get('scrollTreeToCurrent') === '1';
 
   const [jars, setJars] = useState<JarItem[]>([]);
   const [treeLoading, setTreeLoading] = useState(true);
@@ -135,7 +155,9 @@ export default function SidebarPanel({ dataset }: { dataset: string }) {
   const [jarLoading, setJarLoading] = useState(false);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
 
+  const sidebarTreeRef = useRef<HTMLDivElement>(null);
   const jarFilesRef = useRef(jarFiles);
+  const routeKeyRef = useRef('');
   jarFilesRef.current = jarFiles;
 
   useEffect(() => {
@@ -153,7 +175,7 @@ export default function SidebarPanel({ dataset }: { dataset: string }) {
       }
     }
 
-    fetchJars();
+    void fetchJars();
   }, [dataset]);
 
   async function expandJar(jar: string) {
@@ -202,34 +224,44 @@ export default function SidebarPanel({ dataset }: { dataset: string }) {
   }
 
   useEffect(() => {
-    if (jarName && expandedJar !== jarName) {
-      void expandJar(jarName);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expandedJar, jarName]);
-
-  useEffect(() => {
-    if (!className || !jarName || !jarFiles[jarName]) {
+    const routeKey = `${jarName}:${className}`;
+    if (!jarName) {
+      routeKeyRef.current = '';
+      setExpandedJar(null);
+      setExpandedDirs(new Set());
       return;
     }
 
-    const parts = className.split('/');
-    const dirs: string[] = [];
-    let current = '';
-
-    for (let index = 0; index < parts.length - 1; index += 1) {
-      current = current ? `${current}/${parts[index]}` : parts[index];
-      dirs.push(current);
+    if (routeKeyRef.current === routeKey) {
+      return;
     }
 
-    setExpandedDirs(prev => {
-      const next = new Set(prev);
-      dirs.forEach(dir => next.add(dir));
-      return next;
-    });
-  }, [className, jarFiles, jarName]);
+    routeKeyRef.current = routeKey;
+    setExpandedJar(jarName);
+    setExpandedDirs(className ? getExpandedDirSet(className) : new Set());
 
-  function buildSwitchUrl(targetDataset: string): string {
+    if (!jarFilesRef.current[jarName]) {
+      void expandJar(jarName);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [className, jarName]);
+
+  useEffect(() => {
+    if (!scrollTreeToCurrent || !className || !jarName || !jarFiles[jarName] || !sidebarTreeRef.current) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const activeNode = sidebarTreeRef.current?.querySelector('.tree-node-file.active');
+      if (activeNode instanceof HTMLElement) {
+        activeNode.scrollIntoView({ block: 'start', inline: 'nearest' });
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [className, expandedDirs, expandedJar, jarFiles, jarName, scrollTreeToCurrent]);
+
+  function buildSwitchUrl(targetDataset: string) {
     if (!jarName) {
       return `/viewer/${targetDataset}`;
     }
@@ -244,8 +276,9 @@ export default function SidebarPanel({ dataset }: { dataset: string }) {
     if (subclass) {
       query.set('subclass', subclass);
     }
-    const queryString = query.size > 0 ? `?${query.toString()}` : '';
-    return `/viewer/${targetDataset}/${pathPart}${queryString}`;
+    query.set('scrollTreeToCurrent', '1');
+
+    return `/viewer/${targetDataset}/${pathPart}${query.size > 0 ? `?${query.toString()}` : ''}`;
   }
 
   return (
@@ -266,7 +299,7 @@ export default function SidebarPanel({ dataset }: { dataset: string }) {
       </div>
 
       <div className="sidebar-title">文件树</div>
-      <div className="sidebar-tree">
+      <div ref={sidebarTreeRef} className="sidebar-tree">
         {treeLoading ? (
           <div className="sidebar-hint">正在扫描产物...</div>
         ) : jars.length === 0 ? (
@@ -282,16 +315,16 @@ export default function SidebarPanel({ dataset }: { dataset: string }) {
                 <div
                   className={`tree-node tree-node-jar ${isActive ? 'active' : ''}`}
                   onClick={() => toggleJar(jar.path)}
-                  title={jar.name}
+                  title={jar.path}
                 >
                   <span className="tree-expand-icon" aria-hidden="true">
-                    {isExpanded ? '▾' : '▸'}
+                    {isExpanded ? '▼' : '▶'}
                   </span>
                   <span className="icon" aria-hidden="true">📦</span>
                   <span className="tree-node-name">{jar.name}</span>
                 </div>
 
-                {isExpanded && (
+                {isExpanded ? (
                   <div className="tree-jar-children">
                     {jarLoading && tree.length === 0 ? (
                       <div className="sidebar-hint">加载中...</div>
@@ -309,7 +342,7 @@ export default function SidebarPanel({ dataset }: { dataset: string }) {
                       ))
                     )}
                   </div>
-                )}
+                ) : null}
               </div>
             );
           })

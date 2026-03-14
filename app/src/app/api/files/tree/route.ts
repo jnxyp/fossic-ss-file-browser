@@ -26,7 +26,8 @@ export async function GET(request: Request) {
   try {
     // 请求展开某个 jar 内的文件列表
     if (jar) {
-      const zipPath = path.join(rootDir, jar);
+      const zipName = jar.endsWith('.zip') ? jar : jar.replace(/\.jar$/, '.zip');
+      const zipPath = path.join(rootDir, zipName);
       if (!fs.existsSync(zipPath)) {
         return NextResponse.json({ files: [], error: 'JAR 不存在' }, { status: 404 });
       }
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
       .filter(item => item.endsWith('.zip'))
       .map(zipName => ({
         name: zipName.replace('.zip', ''),
-        path: zipName,
+        path: zipName.replace('.zip', '.jar'),
         type: 'jar' as const,
       }));
 

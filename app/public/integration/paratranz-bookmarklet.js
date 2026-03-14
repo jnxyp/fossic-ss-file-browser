@@ -48,6 +48,7 @@
   var connectionStatus = 'disconnected';
   var monitorTimer = null;
   var contextObserver = null;
+  var hasCompletedHandshake = false;
 
   function loadAutoFollow() {
     try {
@@ -133,6 +134,7 @@
     }
 
     appOrigin = null;
+    hasCompletedHandshake = false;
     setConnectionStatus('searching');
     browserWindow = window.open(
       browserBaseUrl + '/viewer/localization',
@@ -167,6 +169,7 @@
 
     browserWindow = null;
     appOrigin = null;
+    hasCompletedHandshake = false;
     cleanup();
   }
 
@@ -273,9 +276,11 @@
     }
 
     if (message.type === 'FB_READY') {
+      var shouldTriggerNavigate = autoFollow && !hasCompletedHandshake;
       appOrigin = message.payload && message.payload.appOrigin ? message.payload.appOrigin : allowedBrowserOrigin;
+      hasCompletedHandshake = true;
       setConnectionStatus('connected');
-      if (autoFollow) {
+      if (shouldTriggerNavigate) {
         window.setTimeout(triggerNavigate, 50);
       }
     }
