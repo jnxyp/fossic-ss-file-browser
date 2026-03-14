@@ -72,3 +72,36 @@
 - `utf8_index` 映射准确，无漂移。
 - 更新任务执行期间，用户浏览不受影响。
 - Bookmarklet 状态条能准确恢复丢失的浏览器窗口连接。
+
+## 8. 实现进度表 (Checklist)
+
+### M1: 基座搭建 (进行中)
+- [x] Git 仓库初始化与 .gitignore 配置
+- [x] 基础目录结构 (app, updater, artifacts, tools)
+- [x] A/B 存储结构与 manifest.json 初始定义
+- [x] docker-compose.yml 基础拓扑定义
+- [x] 反编译器 (cfr.jar) 就位
+- [x] app 服务初始化 (Next.js + TypeScript)
+- [ ] updater 服务初始化 (Node.js + Dockerfile)
+- [ ] A/B 切换逻辑 (API /api/internal/update-notify)
+
+### M2: 单点跳转闭环
+- [ ] postMessage 协议定义与类型共享
+- [ ] Shiki 代码高亮集成
+- [ ] className + utf8_index 定位逻辑实现
+- [ ] 自动滚动与高亮
+
+### M3: 双视图与版本管理
+- [ ] Original / Localized 视图切换 UI
+- [ ] 版本信息展示 (基于 manifest.json)
+- [ ] 切换时的上下文保持逻辑
+
+### M4: 全自动更新
+- [ ] updater: GitHub 仓库同步逻辑
+- [ ] updater: 反编译与索引生成流水线
+- [ ] updater: A/B 目录轮转与更新通知
+
+### M5: 扩展视图
+- [ ] CSV 表格只读视图
+- [ ] JSON/TXT 文本视图
+- [ ] Bookmarklet 状态条增强
