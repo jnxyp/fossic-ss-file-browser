@@ -36,7 +36,7 @@ export default function ViewerPage() {
 
   const dataset = params.dataset as string;
   const pathSegments = params.path as string[] | undefined;
-  const stringId = searchParams.get('stringId') ?? undefined;
+  const utf8ConstId = searchParams.get('utf8ConstId') ?? undefined;
 
   const jarName = pathSegments?.[0] ? decodeURIComponent(pathSegments[0]) : '';
   const className = pathSegments ? pathSegments.slice(1).join('/') : '';
@@ -51,7 +51,7 @@ export default function ViewerPage() {
     ds: string,
     jar: string,
     cls: string,
-    sid?: string,
+    targetUtf8ConstId?: string,
   ) => {
     if (!jar || !cls) {
       return;
@@ -80,9 +80,9 @@ export default function ViewerPage() {
     const lang = cls.endsWith('.java') || cls.endsWith('.class') ? 'java' : 'text';
 
     let highlightLines: number[] = [];
-    if (sid) {
+    if (targetUtf8ConstId) {
       const indexResponse = await fetch(
-        `/api/files/index?dataset=${ds}&jar=${encodeURIComponent(jar)}&class=${encodeURIComponent(cls)}&stringId=${encodeURIComponent(sid)}`
+        `/api/files/index?dataset=${ds}&jar=${encodeURIComponent(jar)}&class=${encodeURIComponent(cls)}&utf8ConstId=${encodeURIComponent(targetUtf8ConstId)}`
       );
       if (indexResponse.ok) {
         const data = await indexResponse.json();
@@ -103,11 +103,43 @@ export default function ViewerPage() {
   useEffect(() => {
     if (jarName && className) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      void loadFile(dataset, jarName, className, stringId);
+      void loadFile(dataset, jarName, className, utf8ConstId);
     }
-  }, [className, dataset, jarName, loadFile, stringId]);
+  }, [className, dataset, jarName, loadFile, utf8ConstId]);
 
   useEffect(() => {
+    async function sendReadyMessage() {
+      if (!window.opener) {
+        return;
+      }
+
+      let revision = '';
+      try {
+        const response = await fetch('/api/manifest');
+        if (response.ok) {
+          const manifest = await response.json() as { revision?: string };
+          revision = manifest.revision ?? '';
+        }
+      } catch {
+        // Ignore transient manifest fetch failures for handshake.
+      }
+
+      window.opener.postMessage(
+        {
+          protocol: PROTOCOL_NAME,
+          type: MessageType.FB_READY,
+          requestId: crypto.randomUUID(),
+          payload: {
+            connected: true,
+            appOrigin: window.location.origin,
+            dataset,
+            revision,
+          },
+        },
+        'https://paratranz.cn'
+      );
+    }
+
     function handleMessage(event: MessageEvent) {
       if (!ALLOWED_ORIGINS.includes(event.origin)) {
         return;
@@ -125,26 +157,16 @@ export default function ViewerPage() {
       const payload = message.payload as NavigatePayload;
       const javaPath = payload.className.replace(/\.class$/, '.java');
       router.push(
-        `/viewer/${payload.dataset}/${encodeURIComponent(payload.jarName)}/${javaPath}?stringId=${encodeURIComponent(payload.stringId)}`
+        `/viewer/${payload.dataset}/${encodeURIComponent(payload.jarName)}/${javaPath}?utf8ConstId=${encodeURIComponent(payload.utf8ConstId)}`
       );
     }
 
     window.addEventListener('message', handleMessage);
 
-    if (window.opener) {
-      window.opener.postMessage(
-        {
-          protocol: PROTOCOL_NAME,
-          type: MessageType.FB_READY,
-          requestId: crypto.randomUUID(),
-          payload: { connected: true, appOrigin: window.location.origin },
-        },
-        'https://paratranz.cn'
-      );
-    }
+    void sendReadyMessage();
 
     return () => window.removeEventListener('message', handleMessage);
-  }, [router]);
+  }, [dataset, router]);
 
   useEffect(() => {
     if (!copied) {

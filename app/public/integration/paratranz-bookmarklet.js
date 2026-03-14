@@ -1,171 +1,317 @@
 /**
- * ss-file-browser Bookmarklet v1
- * 加载方式：将以下 URL 保存为书签，点击后在 ParaTranz 页面注入状态条。
+ * ss-file-browser Bookmarklet v2
  *
+ * 加载方式：
  * javascript:(function(){var s=document.createElement('script');s.src='YOUR_SERVER/integration/paratranz-bookmarklet.js';document.head.appendChild(s);})();
  */
 (function () {
   'use strict';
 
-  // ── 配置 ──────────────────────────────────────────────────────────────────
-  var BROWSER_BASE_URL = 'http://localhost:3000';
-  var BROWSER_WINDOW_NAME = 'ss-file-browser';
-  var PROTOCOL_NAME = 'ss-file-browser/v1';
-  var ALLOWED_BROWSER_ORIGINS = [BROWSER_BASE_URL];
-  // ──────────────────────────────────────────────────────────────────────────
+  var REQUIRED_PROJECT_PREFIX = 'https://paratranz.cn/projects/3489';
 
-  // 防止重复注入
-  if (window.__ssfb_injected) return;
+  if (!window.location.href.startsWith(REQUIRED_PROJECT_PREFIX)) {
+    window.alert('ss-file-browser 仅支持在 ParaTranz 项目 3489 页面中启动。');
+    return;
+  }
+
+  if (window.__ssfb_injected) {
+    return;
+  }
   window.__ssfb_injected = true;
+
+  var SCRIPT_PATH = '/integration/paratranz-bookmarklet.js';
+  var PROTOCOL_NAME = 'ss-file-browser/v1';
+  var AUTO_FOLLOW_STORAGE_KEY = '__ssfb_auto_follow';
+  var WINDOW_CHECK_INTERVAL_MS = 1500;
+
+  function resolveBrowserBaseUrl() {
+    var currentScript = document.currentScript;
+    if (!currentScript || !currentScript.src) {
+      currentScript = document.querySelector('script[src*="' + SCRIPT_PATH + '"]');
+    }
+
+    if (currentScript && currentScript.src) {
+      var scriptUrl = new URL(currentScript.src, window.location.href);
+      return scriptUrl.origin + scriptUrl.pathname.replace(/\/integration\/paratranz-bookmarklet\.js$/, '');
+    }
+
+    return 'http://localhost:3000';
+  }
+
+  var browserBaseUrl = resolveBrowserBaseUrl();
+  var allowedBrowserOrigin = new URL(browserBaseUrl, window.location.href).origin;
 
   var browserWindow = null;
   var appOrigin = null;
   var statusEl = null;
-  var autoFollow = true;
+  var autoFollow = loadAutoFollow();
+  var connectionStatus = 'disconnected';
+  var monitorTimer = null;
+  var contextObserver = null;
 
-  // ── 状态条 UI ─────────────────────────────────────────────────────────────
+  function loadAutoFollow() {
+    try {
+      var stored = window.localStorage.getItem(AUTO_FOLLOW_STORAGE_KEY);
+      return stored !== 'false';
+    } catch {
+      return true;
+    }
+  }
+
+  function getStatusMeta() {
+    if (connectionStatus === 'connected') {
+      return { dot: '#3fb950', label: '已连接' };
+    }
+    if (connectionStatus === 'searching') {
+      return { dot: '#d29922', label: '正在连接' };
+    }
+    return { dot: '#f85149', label: '连接已断开' };
+  }
+
   function createStatusBar() {
     var bar = document.createElement('div');
     bar.id = '__ssfb_bar';
     bar.style.cssText = [
-      'position:fixed', 'bottom:16px', 'right:16px', 'z-index:999999',
-      'background:#161b22', 'color:#c9d1d9', 'border:1px solid #30363d',
-      'border-radius:8px', 'padding:10px 14px', 'font:12px/1.5 monospace',
-      'box-shadow:0 4px 16px #0005', 'min-width:200px',
-      'display:flex', 'flex-direction:column', 'gap:6px',
+      'position:fixed',
+      'right:16px',
+      'bottom:16px',
+      'z-index:999999',
+      'display:flex',
+      'align-items:center',
+      'gap:8px',
+      'padding:8px 10px',
+      'background:#161b22',
+      'color:#c9d1d9',
+      'border:1px solid #30363d',
+      'border-radius:999px',
+      'box-shadow:0 10px 30px rgba(0,0,0,0.28)',
+      'font:12px/1.2 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif',
+      'white-space:nowrap',
     ].join(';');
     document.body.appendChild(bar);
     return bar;
   }
 
-  function renderStatusBar(status) {
-    if (!statusEl) return;
-    var dot = status === 'connected' ? '#3fb950' : status === 'searching' ? '#d29922' : '#f85149';
-    var label = status === 'connected' ? '已连接' : status === 'searching' ? '连接中...' : '未连接';
+  function renderStatusBar() {
+    if (!statusEl) {
+      return;
+    }
+
+    var statusMeta = getStatusMeta();
+    var reopenLabel = isBrowserOpen() ? '重开窗口' : '打开窗口';
+
     statusEl.innerHTML = [
-      '<div style="display:flex;align-items:center;gap:6px;justify-content:space-between">',
-      '  <span style="display:flex;align-items:center;gap:5px">',
-      '    <span style="width:8px;height:8px;border-radius:50%;background:' + dot + ';display:inline-block"></span>',
-      '    <strong>ss-file-browser</strong>',
-      '  </span>',
-      '  <button id="__ssfb_close" style="background:none;border:none;color:#8b949e;cursor:pointer;font-size:14px;line-height:1;padding:0">✕</button>',
-      '</div>',
-      '<div style="color:#8b949e">' + label + '</div>',
-      '<div style="display:flex;gap:6px;margin-top:2px">',
-      '  <button id="__ssfb_open" style="flex:1;background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:4px;padding:3px 6px;cursor:pointer;font-size:11px">重开浏览器</button>',
-      '  <button id="__ssfb_toggle" style="flex:1;background:' + (autoFollow ? '#1f6feb33' : '#21262d') + ';border:1px solid ' + (autoFollow ? '#388bfd' : '#30363d') + ';color:' + (autoFollow ? '#58a6ff' : '#8b949e') + ';border-radius:4px;padding:3px 6px;cursor:pointer;font-size:11px">自动跟随 ' + (autoFollow ? 'ON' : 'OFF') + '</button>',
-      '</div>',
+      '<span style="display:flex;align-items:center;gap:6px;padding:0 2px">',
+      '  <span style="width:8px;height:8px;border-radius:999px;background:' + statusMeta.dot + ';display:inline-block;flex:0 0 auto"></span>',
+      '  <strong style="font-size:12px;font-weight:600">' + statusMeta.label + '</strong>',
+      '</span>',
+      '<button id="__ssfb_open" type="button" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:999px;padding:5px 10px;cursor:pointer;font-size:12px;line-height:1.2">' + reopenLabel + '</button>',
+      '<button id="__ssfb_close_bar" type="button" style="background:#2d1f21;border:1px solid #5a2d31;color:#f08888;border-radius:999px;padding:5px 10px;cursor:pointer;font-size:12px;line-height:1.2">关闭</button>',
     ].join('');
 
-    document.getElementById('__ssfb_close').onclick = function () {
-      statusEl.remove();
-      statusEl = null;
-      window.__ssfb_injected = false;
+    document.getElementById('__ssfb_open').onclick = function () {
+      openBrowser();
     };
-    document.getElementById('__ssfb_open').onclick = openBrowser;
-    document.getElementById('__ssfb_toggle').onclick = function () {
-      autoFollow = !autoFollow;
-      renderStatusBar(status);
+    document.getElementById('__ssfb_close_bar').onclick = function () {
+      closeIntegration();
     };
   }
 
-  // ── 浏览器窗口管理 ────────────────────────────────────────────────────────
+  function setConnectionStatus(nextStatus) {
+    connectionStatus = nextStatus;
+    renderStatusBar();
+  }
+
   function openBrowser() {
-    renderStatusBar('searching');
-    browserWindow = window.open(BROWSER_BASE_URL + '/viewer/localization', BROWSER_WINDOW_NAME);
+    if (isBrowserOpen()) {
+      try {
+        browserWindow.close();
+      } catch {
+        // Ignore close failures before reopening a fresh window.
+      }
+      browserWindow = null;
+    }
+
+    appOrigin = null;
+    setConnectionStatus('searching');
+    browserWindow = window.open(
+      browserBaseUrl + '/viewer/localization',
+      '_blank',
+      'popup=yes,resizable=yes,scrollbars=yes'
+    );
+    if (!browserWindow) {
+      setConnectionStatus('disconnected');
+      return;
+    }
+    if (browserWindow && typeof browserWindow.focus === 'function') {
+      browserWindow.focus();
+    }
   }
 
   function isBrowserOpen() {
-    return browserWindow && !browserWindow.closed;
+    try {
+      return Boolean(browserWindow) && !browserWindow.closed;
+    } catch {
+      return false;
+    }
+  }
+
+  function closeIntegration() {
+    if (isBrowserOpen()) {
+      try {
+        browserWindow.close();
+      } catch {
+        // Ignore close failures during teardown.
+      }
+    }
+
+    browserWindow = null;
+    appOrigin = null;
+    cleanup();
   }
 
   function sendNavigate(payload) {
     if (!isBrowserOpen()) {
-      renderStatusBar('disconnected');
+      setConnectionStatus('disconnected');
       return;
     }
-    var target = appOrigin || BROWSER_BASE_URL;
-    browserWindow.postMessage({
-      protocol: PROTOCOL_NAME,
-      type: 'PT_NAVIGATE_TO_STRING',
-      requestId: Math.random().toString(36).slice(2),
-      payload: payload,
-    }, target);
+
+    try {
+      browserWindow.postMessage(
+        {
+          protocol: PROTOCOL_NAME,
+          type: 'PT_NAVIGATE_TO_STRING',
+          requestId: Math.random().toString(36).slice(2),
+          payload: payload,
+        },
+        appOrigin || allowedBrowserOrigin
+      );
+    } catch {
+      setConnectionStatus('disconnected');
+    }
   }
 
-  // ── postMessage 监听（接收 FB_READY）────────────────────────────────────
-  window.addEventListener('message', function (event) {
-    if (!ALLOWED_BROWSER_ORIGINS.some(function (o) { return event.origin.startsWith(o); })) return;
-    var msg = event.data;
-    if (!msg || msg.protocol !== PROTOCOL_NAME) return;
-    if (msg.type === 'FB_READY') {
-      appOrigin = msg.payload && msg.payload.appOrigin;
-      renderStatusBar('connected');
-    }
-  });
-
-  // ── DOM 解析：从 ParaTranz 页面提取词条信息 ──────────────────────────────
   function parseCurrentEntry() {
-    // 主选择器：.context .well
     var well = document.querySelector('.context .well');
-    if (!well) return null;
+    if (!well) {
+      return null;
+    }
 
     var text = well.textContent || '';
+    var jarMatch = text.match(/文件：\s*([^\s]+\.jar)/);
+    var classMatch = text.match(/类：\s*([^\s]+\.class)/);
+    var constMatch = text.match(/常量号：\s*(\d+)/);
 
-    // 格式示例：starfarer.api.jar com/fs/.../FleetAssignment.class #160
-    var jarMatch = text.match(/(\S+\.jar)/);
-    var classMatch = text.match(/(\S+\.class)/);
-    var constMatch = text.match(/#(\d+)/);
-
-    if (!jarMatch || !classMatch || !constMatch) return null;
+    if (!jarMatch || !classMatch || !constMatch) {
+      return null;
+    }
 
     return {
       jarName: jarMatch[1],
       className: classMatch[1],
-      stringId: '#' + constMatch[1],
+      utf8ConstId: '#' + String(Number(constMatch[1])),
     };
   }
 
   function getActiveDataset() {
-    // 尝试从页面 URL 或 UI 判断当前是 original 还是 localization
-    // ParaTranz 上默认浏览的是汉化版，暂时固定为 localization
     return 'localization';
   }
 
   function triggerNavigate() {
-    if (!autoFollow) return;
+    if (!autoFollow) {
+      return;
+    }
+
     var entry = parseCurrentEntry();
-    if (!entry) return;
+    if (!entry) {
+      return;
+    }
 
     sendNavigate({
       dataset: getActiveDataset(),
       jarName: entry.jarName,
       className: entry.className,
-      stringId: entry.stringId,
+      utf8ConstId: entry.utf8ConstId,
     });
   }
 
-  // ── 监听 ParaTranz 页面变化 ───────────────────────────────────────────────
-  function attachListeners() {
-    // 点击任意词条行时触发
-    document.addEventListener('click', function (e) {
-      var row = e.target.closest('.string-list .row.string, .context .well');
-      if (row) setTimeout(triggerNavigate, 100); // 等待 DOM 更新
-    });
+  function handleDocumentClick(event) {
+      var target = event.target;
+      if (!target || typeof target.closest !== 'function') {
+        return;
+      }
 
-    // MutationObserver 监听 .context 变化（应对键盘导航）
+      var row = target.closest('.string-list .row.string, .context .well');
+      if (row) {
+        window.setTimeout(triggerNavigate, 100);
+      }
+  }
+
+  function attachListeners() {
+    document.addEventListener('click', handleDocumentClick);
+
     var contextEl = document.querySelector('.context');
     if (contextEl) {
-      var observer = new MutationObserver(function () {
-        setTimeout(triggerNavigate, 150);
+      contextObserver = new MutationObserver(function () {
+        window.setTimeout(triggerNavigate, 150);
       });
-      observer.observe(contextEl, { childList: true, subtree: true, characterData: true });
+      contextObserver.observe(contextEl, { childList: true, subtree: true, characterData: true });
     }
   }
 
-  // ── 初始化 ────────────────────────────────────────────────────────────────
+  function startWindowMonitor() {
+    monitorTimer = window.setInterval(function () {
+      if (connectionStatus !== 'disconnected' && !isBrowserOpen()) {
+        setConnectionStatus('disconnected');
+      }
+    }, WINDOW_CHECK_INTERVAL_MS);
+  }
+
+  function handleMessage(event) {
+    if (event.origin !== allowedBrowserOrigin) {
+      return;
+    }
+
+    var message = event.data;
+    if (!message || message.protocol !== PROTOCOL_NAME) {
+      return;
+    }
+
+    if (message.type === 'FB_READY') {
+      appOrigin = message.payload && message.payload.appOrigin ? message.payload.appOrigin : allowedBrowserOrigin;
+      setConnectionStatus('connected');
+      if (autoFollow) {
+        window.setTimeout(triggerNavigate, 50);
+      }
+    }
+  }
+
+  function cleanup() {
+    if (monitorTimer) {
+      window.clearInterval(monitorTimer);
+      monitorTimer = null;
+    }
+
+    if (contextObserver) {
+      contextObserver.disconnect();
+      contextObserver = null;
+    }
+
+    document.removeEventListener('click', handleDocumentClick);
+    window.removeEventListener('message', handleMessage);
+
+    if (statusEl) {
+      statusEl.remove();
+      statusEl = null;
+    }
+
+    window.__ssfb_injected = false;
+  }
+
   statusEl = createStatusBar();
-  renderStatusBar('disconnected');
+  renderStatusBar();
   attachListeners();
+  startWindowMonitor();
+  window.addEventListener('message', handleMessage);
   openBrowser();
 })();

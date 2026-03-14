@@ -55,13 +55,13 @@ export async function readFileFromJar(
  * 根据 utf8_index 获取文件中所有匹配的行号（多重匹配支持）
  * @param jarName Jar/Zip 文件名
  * @param className 类路径
- * @param stringId 字符串 ID (形如 #160)
+ * @param utf8ConstId 常量 ID (形如 #160)
  * @param dataset 数据集类型
  */
-export async function findLinesByStringId(
+export async function findLinesByUtf8ConstId(
   jarName: string,
   className: string,
-  stringId: string,
+  utf8ConstId: string,
   dataset: 'original' | 'localization' = 'localization'
 ): Promise<number[]> {
   const artifactsPath = getArtifactsPath();
@@ -75,7 +75,7 @@ export async function findLinesByStringId(
     const content = fs.readFileSync(indexFile, 'utf-8');
     const indexData = JSON.parse(content) as StringIndexData;
 
-    const utf8Index = parseInt(stringId.replace('#', ''), 10);
+    const utf8Index = parseInt(utf8ConstId.replace('#', ''), 10);
     const normalizedClass = className.replace(/\.(class|java)$/, '');
 
     const fileEntries = indexData[normalizedClass];

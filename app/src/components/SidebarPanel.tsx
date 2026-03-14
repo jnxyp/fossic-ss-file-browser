@@ -124,7 +124,7 @@ export default function SidebarPanel({ dataset }: { dataset: string }) {
   const pathSegments = params.path as string[] | undefined;
   const jarName = pathSegments?.[0] ? decodeURIComponent(pathSegments[0]) : '';
   const className = pathSegments ? pathSegments.slice(1).join('/') : '';
-  const stringId = searchParams.get('stringId') ?? undefined;
+  const utf8ConstId = searchParams.get('utf8ConstId') ?? undefined;
 
   const [jars, setJars] = useState<JarItem[]>([]);
   const [treeLoading, setTreeLoading] = useState(true);
@@ -236,7 +236,7 @@ export default function SidebarPanel({ dataset }: { dataset: string }) {
     const pathPart = className
       ? `${encodeURIComponent(jarName)}/${className}`
       : encodeURIComponent(jarName);
-    const queryString = stringId ? `?stringId=${encodeURIComponent(stringId)}` : '';
+    const queryString = utf8ConstId ? `?utf8ConstId=${encodeURIComponent(utf8ConstId)}` : '';
     return `/viewer/${targetDataset}/${pathPart}${queryString}`;
   }
 
