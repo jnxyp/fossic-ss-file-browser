@@ -15,16 +15,11 @@ export async function readFileFromJar(
   dataset: 'original' | 'localization' = 'localization'
 ): Promise<string | null> {
   const artifactsPath = getArtifactsPath();
-  
-  // 寻找 zip 文件。注意：由于 CFR 默认输出 java，我们需要匹配 jarName 对应的源码 zip
-  // 路径约定: artifacts/[A|B]/[dataset]/[jarName].zip (例如 starfarer.api.jar.zip)
-  let zipPath = path.join(artifactsPath, dataset, `${jarName}.zip`);
-  
-  // 兼容性处理：如果 jarName 已经带了 .zip 扩展名
-  if (!fs.existsSync(zipPath) && !jarName.endsWith('.zip')) {
-     // 尝试 .jar.zip 这种可能的命名
-     zipPath = path.join(artifactsPath, dataset, `${jarName}.zip`);
-  }
+
+  // 路径约定: artifacts/[A|B]/[dataset]/[baseName].zip
+  // jarName 可能已带 .zip（来自侧边栏），也可能是 .jar（来自 postMessage）
+  const zipName = jarName.endsWith('.zip') ? jarName : `${jarName.replace(/\.jar$/, '')}.zip`;
+  const zipPath = path.join(artifactsPath, dataset, zipName);
 
   if (!fs.existsSync(zipPath)) {
     console.error(`Zip 文件不存在: ${zipPath}`);
@@ -63,8 +58,9 @@ export async function findLinesByStringId(
   dataset: 'original' | 'localization' = 'localization'
 ): Promise<number[]> {
   const artifactsPath = getArtifactsPath();
-  // 索引文件位置：artifacts/[A|B]/[dataset]/[jarName].strings.json
-  const indexFile = path.join(artifactsPath, dataset, `${jarName}.strings.json`);
+  // 索引文件位置：artifacts/[A|B]/[dataset]/[baseName].strings.json
+  const baseName = jarName.replace(/\.(jar|zip)$/, '');
+  const indexFile = path.join(artifactsPath, dataset, `${baseName}.strings.json`);
 
   if (!fs.existsSync(indexFile)) return [];
 

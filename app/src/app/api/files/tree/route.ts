@@ -4,47 +4,49 @@ import fs from 'fs';
 import path from 'path';
 import AdmZip from 'adm-zip';
 
-/**
- * 文件树节点接口
- */
 export interface FileTreeNode {
   name: string;
-  path: string;       // 逻辑路径 (e.g. "starfarer.api.jar/com/fs/...")
+  path: string;
   type: 'file' | 'directory' | 'jar';
   children?: FileTreeNode[];
 }
 
-/**
- * 获取数据集的文件树结构
- */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const dataset = (searchParams.get('dataset') as 'original' | 'localization') || 'localization';
-  
+  const jar = searchParams.get('jar');
+
   const artifactsPath = getArtifactsPath();
   const rootDir = path.join(artifactsPath, dataset);
-  
+
   if (!fs.existsSync(rootDir)) {
     return NextResponse.json({ tree: [], error: '数据集目录不存在' });
   }
 
-  // 扫描第一层：所有的 .zip (源码包) 和 .strings.json (索引)
-  // 我们只向用户展示 .zip/jar 包
   try {
+    // 请求展开某个 jar 内的文件列表
+    if (jar) {
+      const zipPath = path.join(rootDir, jar);
+      if (!fs.existsSync(zipPath)) {
+        return NextResponse.json({ files: [], error: 'JAR 不存在' }, { status: 404 });
+      }
+      const zip = new AdmZip(zipPath);
+      const files = zip.getEntries()
+        .filter(e => !e.isDirectory && e.entryName.endsWith('.java'))
+        .map(e => e.entryName)
+        .sort();
+      return NextResponse.json({ files });
+    }
+
+    // 顶层：列出所有 zip 包
     const items = fs.readdirSync(rootDir);
     const tree: FileTreeNode[] = items
       .filter(item => item.endsWith('.zip'))
-      .map(zipName => {
-        // 构建 Jar 节点
-        const node: FileTreeNode = {
-          name: zipName.replace('.zip', ''), // 展示为 jar 名
-          path: zipName,
-          type: 'jar',
-          // 为了保持 API 响应快速，Zip 内部结构可以后续改为按需加载
-          // 这里我们先列出 Zip 内的前两层作为测试
-        };
-        return node;
-      });
+      .map(zipName => ({
+        name: zipName.replace('.zip', ''),
+        path: zipName,
+        type: 'jar' as const,
+      }));
 
     return NextResponse.json({ tree });
   } catch (error) {
