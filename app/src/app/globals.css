@@ -1,16 +1,50 @@
 :root {
   --sidebar-width: 280px;
   --header-height: 35px;
-  --bg-color: #1e1e1e;
-  --sidebar-bg: #252526;
-  --titlebar-bg: #3c3c3c;
-  --border-color: #3d3d3d;
-  --text-color: #cccccc;
-  --text-muted: #858585;
-  --accent-color: #4fc1ff;
-  --hover-bg: #2a2d2e;
-  --active-bg: #094771;
-  --active-text: #ffffff;
+  --footer-height: 34px;
+  --bg-color: #11151b;
+  --sidebar-bg: #171c24;
+  --titlebar-bg: #1a2029;
+  --border-color: #293244;
+  --text-color: #d9e2f2;
+  --text-muted: #91a0b8;
+  --accent-color: #69b7ff;
+  --hover-bg: #202734;
+  --active-bg: #16395c;
+  --active-text: #f8fbff;
+  --surface-color: #121821;
+  --footer-bg: rgba(15, 20, 28, 0.94);
+  --status-pill-bg: #1a2432;
+  --status-pill-border: #2d4665;
+  --status-pill-text: #9fcbff;
+  --button-bg: #1a2432;
+  --button-hover-bg: #223147;
+  --button-text: #d9e2f2;
+  --highlight-bg: rgba(76, 153, 255, 0.18);
+  --highlight-border: #5ea8ff;
+}
+
+[data-theme='light'] {
+  --bg-color: #f4f7fb;
+  --sidebar-bg: #edf2f8;
+  --titlebar-bg: #e4ebf4;
+  --border-color: #c8d4e2;
+  --text-color: #1f2937;
+  --text-muted: #66758b;
+  --accent-color: #0068d6;
+  --hover-bg: #dfe8f3;
+  --active-bg: #cfe4ff;
+  --active-text: #0f2745;
+  --surface-color: #ffffff;
+  --footer-bg: rgba(255, 255, 255, 0.92);
+  --status-pill-bg: #e1efff;
+  --status-pill-border: #b4d0f3;
+  --status-pill-text: #0f4f96;
+  --button-bg: #eef4fb;
+  --button-hover-bg: #dde8f6;
+  --button-text: #1f2937;
+  --highlight-bg: rgba(0, 104, 214, 0.12);
+  --highlight-border: #0068d6;
 }
 
 * {
@@ -23,9 +57,15 @@ html, body {
   height: 100%;
   background-color: var(--bg-color);
   color: var(--text-color);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-family: var(--font-geist-sans), "Segoe UI", Helvetica, Arial, sans-serif;
   font-size: 13px;
   overflow: hidden;
+}
+
+body {
+  background-image:
+    radial-gradient(circle at top left, rgba(105, 183, 255, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 28%);
 }
 
 a {
@@ -33,10 +73,18 @@ a {
   text-decoration: none;
 }
 
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
 /* 布局容器 */
 .layout-container {
   display: flex;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
   width: 100vw;
 }
 
@@ -48,15 +96,18 @@ a {
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow-y: auto;
 }
 
 /* 主内容区 */
 .main-content {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background-color: var(--surface-color);
 }
 
 /* 顶部导航条 */
@@ -79,7 +130,7 @@ a {
   flex: 1;
   overflow: auto;
   position: relative;
-  background-color: var(--bg-color);
+  background-color: var(--surface-color);
 }
 
 /* 数据集切换器 */
@@ -137,7 +188,7 @@ a {
 }
 
 .sidebar-version-value.mono {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-geist-mono), 'Cascadia Code', Consolas, monospace;
   font-size: 11px;
 }
 
@@ -236,7 +287,7 @@ a {
 .tree-dir-children {
   margin-left: 5px;
   padding-left: 5px;
-  border-left: 1px solid #3a3a3a;
+  border-left: 1px solid var(--border-color);
 }
 
 /* class 文件节点 */
@@ -301,22 +352,22 @@ a {
 }
 
 .dataset-badge.original {
-  background: #3a3a3a;
-  color: #cccccc;
-  border-color: #555555;
+  background: color-mix(in srgb, var(--surface-color) 82%, var(--text-color) 18%);
+  color: var(--text-color);
+  border-color: var(--border-color);
 }
 
 .dataset-badge.localization {
-  background: #0e4429;
-  color: #3fb950;
-  border-color: #238636;
+  background: color-mix(in srgb, var(--accent-color) 14%, var(--surface-color) 86%);
+  color: var(--accent-color);
+  border-color: color-mix(in srgb, var(--accent-color) 36%, var(--border-color) 64%);
 }
 
 /* 代码加载遮罩 */
 .code-loading {
   position: absolute;
   inset: 0;
-  background: var(--bg-color);
+  background: var(--surface-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -332,7 +383,7 @@ a {
   background-color: transparent !important;
   font-size: 13px;
   line-height: 1.6;
-  font-family: 'ui-monospace', 'SFMono-Regular', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  font-family: var(--font-geist-mono), 'Cascadia Code', Consolas, monospace;
 }
 
 .code-viewer code {
@@ -341,9 +392,99 @@ a {
 
 /* 目标行高亮 */
 .code-viewer .highlighted-line {
-  background-color: #388bfd22;
-  border-left: 2px solid #388bfd;
+  background-color: var(--highlight-bg);
+  border-left: 2px solid var(--highlight-border);
   margin-left: -1.5rem;
   padding-left: calc(1.5rem - 2px);
   display: block;
+}
+
+.status-footer {
+  height: var(--footer-height);
+  border-top: 1px solid var(--border-color);
+  background: var(--footer-bg);
+  backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  flex-shrink: 0;
+}
+
+.status-footer-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--status-pill-bg);
+  border: 1px solid var(--status-pill-border);
+  color: var(--status-pill-text);
+}
+
+.status-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-item strong {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.theme-toggle {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--button-bg);
+  color: var(--button-text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.theme-toggle:hover {
+  background: var(--button-hover-bg);
+}
+
+.theme-toggle.active {
+  background: color-mix(in srgb, var(--accent-color) 14%, var(--button-bg) 86%);
+  border-color: color-mix(in srgb, var(--accent-color) 38%, var(--border-color) 62%);
+  color: var(--text-color);
+}
+
+.theme-toggle-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --sidebar-width: 240px;
+  }
+
+  .status-footer {
+    padding: 0 10px;
+  }
+
+  .status-footer-meta {
+    gap: 8px;
+  }
+
 }

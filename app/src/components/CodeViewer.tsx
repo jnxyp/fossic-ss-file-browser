@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useTheme } from 'next-themes';
 import type { Highlighter, ShikiTransformer } from 'shiki';
 
 interface CodeViewerProps {
@@ -16,7 +17,7 @@ async function getHighlighter() {
   if (!highlighterPromise) {
     const { createHighlighter } = await import('shiki');
     highlighterPromise = createHighlighter({
-      themes: ['github-dark'],
+      themes: ['github-dark', 'github-light'],
       langs: ['java', 'json', 'text'],
     });
   }
@@ -26,6 +27,7 @@ async function getHighlighter() {
 export default function CodeViewer({ code, lang = 'java', highlightLines = [] }: CodeViewerProps) {
   const [html, setHtml] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const { resolvedTheme } = useTheme();
 
   useEffect(() => {
     let cancelled = false;
@@ -37,9 +39,11 @@ export default function CodeViewer({ code, lang = 'java', highlightLines = [] }:
       // 不在支持列表里的语言降级为纯文本
       const safeLang = ['java', 'json'].includes(lang) ? lang : 'text';
 
+      const theme = resolvedTheme === 'light' ? 'github-light' : 'github-dark';
+
       const result = h.codeToHtml(code, {
         lang: safeLang,
-        theme: 'github-dark',
+        theme,
         transformers: highlightLines.length > 0
           ? [({
               name: 'highlight-lines',
@@ -60,7 +64,7 @@ export default function CodeViewer({ code, lang = 'java', highlightLines = [] }:
 
     highlight();
     return () => { cancelled = true; };
-  }, [code, lang, highlightLines]);
+  }, [code, highlightLines, lang, resolvedTheme]);
 
   // 高亮完成后滚动到第一个目标行
   useEffect(() => {
