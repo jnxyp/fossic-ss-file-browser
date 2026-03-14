@@ -16,8 +16,12 @@
 - **共享存储**：通过 Docker Volume 共享 `artifacts/` 目录。
 - **开发语言**：全栈 TypeScript，共享类型 definition。
 - **核心组件**：
-  - 代码高亮：`Shiki` (只读模式)。
+  - 代码高亮：`Shiki` (浏览器端，`shiki/bundle/web`，按需加载 grammar)。
   - 反编译器：`CFR` (Java)。
+- **前后端职责边界**：
+  - 后端 API 仅负责文件读取与索引查询，返回原始数据（代码字符串、索引条目）。
+  - 代码高亮、行定位、滚动等所有展示逻辑均在前端完成。
+  - Viewer 页面及所有展示组件为 Client Component，无 SSR。
 
 ## 3. 数据管理与更新 (A/B 全量切换)
 ### 3.1 数据来源
@@ -51,7 +55,7 @@
 
 ### 4.3 postMessage 协议 (v1)
 - **PT_NAVIGATE_TO_STRING**: ParaTranz -> Browser。
-  - `payload: { dataset, className, stringId }`
+  - `payload: { dataset, jarName, className, stringId }`
 - **FB_READY**: Browser -> ParaTranz。
 - **错误处理**: 明确 `CLASS_NOT_FOUND`, `STRING_NOT_FOUND` 等错误反馈。
 
@@ -86,11 +90,16 @@
 - [x] A/B 切换逻辑 (API /api/internal/update-notify)
 
 
-### M2: 单点跳转闭环
+### M2: 单点跳转与基础浏览 (已完成)
 - [x] postMessage 协议定义与类型共享
-- [ ] Shiki 代码高亮集成
-- [ ] className + utf8_index 定位逻辑实现
-- [ ] 自动滚动与高亮
+- [x] 目录扫描与文件树 API 实现
+- [x] 侧边栏文件树 UI 组件
+- [x] 后端 API 重构：`/api/files/content` 与 `/api/files/index`（按 class 粒度返回原始数据）
+- [x] Viewer 页面改为 Client Component，Shiki 移至前端高亮
+- [x] Bookmarklet 基础版：DOM 解析 + postMessage 发送 + 状态条（连接状态 + 重开按钮）
+- [x] postMessage 监听与路由跳转
+- [x] className + utf8_index 定位、行高亮与自动滚动
+
 
 ### M3: 双视图与版本管理
 - [ ] Original / Localized 视图切换 UI
