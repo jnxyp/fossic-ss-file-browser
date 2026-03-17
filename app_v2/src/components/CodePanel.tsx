@@ -37,6 +37,7 @@ interface Props {
   stringEntries?: StringEntry[];
   activeUtf8Index?: number;
   activeConstTable?: string;
+  navigationToken?: string;
   highlightLines?: number[];
   onClickEntry?: (entry: StringEntry) => void;
 }
@@ -50,6 +51,7 @@ export default function CodePanel({
   stringEntries,
   activeUtf8Index,
   activeConstTable,
+  navigationToken,
   highlightLines = [],
   onClickEntry,
 }: Props) {
@@ -177,7 +179,7 @@ export default function CodePanel({
         ?.querySelector<HTMLElement>(`[data-line="${highlightLines[0]}"]`)
         ?.scrollIntoView({ block: 'center', behavior: 'instant' });
     });
-  }, [html, highlightLines]);
+  }, [html, highlightLines, navigationToken]);
 
   // ─── Click handler (event delegation) ─────────────────────────────────────
 

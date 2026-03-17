@@ -140,6 +140,7 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
     const query = new URLSearchParams();
     if (startLine) query.set('highlightLine', String(startLine));
     if (dataset) query.set('preferredDataset', dataset);
+    query.set('nav', String(Date.now()));
     const qs = query.toString();
     const url = qs
       ? `/viewer/${encodeURIComponent(jarName)}/${filePath}?${qs}`

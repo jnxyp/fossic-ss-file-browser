@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import CodePanel from './CodePanel';
 import type { StringEntry, ViewMode, Dataset } from '@/lib/types';
@@ -91,6 +91,7 @@ interface Props {
   activeUtf8Index?: number;
   activeConstTable?: string;
   preferredDataset?: Dataset;
+  navigationToken?: string;
   highlightLines?: number[];
   onClickEntry?: (entry: StringEntry, dataset: Dataset) => void;
 }
@@ -114,6 +115,7 @@ export default function ViewerArea({
   activeUtf8Index,
   activeConstTable,
   preferredDataset,
+  navigationToken,
   highlightLines = [],
   onClickEntry,
 }: Props) {
@@ -159,7 +161,7 @@ export default function ViewerArea({
     });
   }, [preferredDataset]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     applyScrollState();
   }, [mode, applyScrollState]);
 
@@ -249,7 +251,7 @@ export default function ViewerArea({
   const hasCurrentContent = contentFor.jarName === jarName && contentFor.filePath === filePath;
   const hasCurrentStringEntries = stringEntriesFor.jarName === jarName && stringEntriesFor.filePath === filePath;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!hasCurrentContent) return;
     applyScrollState();
   }, [hasCurrentContent, content.original, content.localization, applyScrollState]);
@@ -295,6 +297,7 @@ export default function ViewerArea({
             stringEntries={hasCurrentStringEntries ? (stringEntries.original ?? undefined) : undefined}
             activeUtf8Index={activeUtf8Index}
             activeConstTable={activeConstTable}
+            navigationToken={navigationToken}
             highlightLines={highlightLines}
             onClickEntry={e => onClickEntry?.(e, 'original')}
           />
@@ -308,6 +311,7 @@ export default function ViewerArea({
             stringEntries={hasCurrentStringEntries ? (stringEntries.localization ?? undefined) : undefined}
             activeUtf8Index={activeUtf8Index}
             activeConstTable={activeConstTable}
+            navigationToken={navigationToken}
             highlightLines={highlightLines}
             onClickEntry={e => onClickEntry?.(e, 'localization')}
           />

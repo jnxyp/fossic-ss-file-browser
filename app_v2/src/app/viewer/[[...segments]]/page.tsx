@@ -25,6 +25,7 @@ export default function ViewerPage() {
   const subclass = searchParams.get('subclass') ?? undefined;
   const highlightLineParam = searchParams.get('highlightLine');
   const preferredDatasetParam = searchParams.get('preferredDataset');
+  const navigationToken = searchParams.get('nav') ?? undefined;
   const preferredDataset = preferredDatasetParam === 'original' || preferredDatasetParam === 'localization'
     ? preferredDatasetParam
     : undefined;
@@ -135,6 +136,7 @@ export default function ViewerPage() {
         activeUtf8Index={activeUtf8Index}
         activeConstTable={activeConstTable}
         preferredDataset={preferredDataset}
+        navigationToken={navigationToken}
         highlightLines={highlightLines}
         onClickEntry={handleClickEntry}
       />
