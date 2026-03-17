@@ -137,16 +137,14 @@ export default function CodePanel({
               }
             },
           },
-
-          // ── Highlight lines transformer ──────────────────────────────────
-          ...(highlightLines.length > 0 ? [{
+          {
             line(node: { properties: Record<string, unknown> }, lineNum: number) {
-              if (highlightLines.includes(lineNum)) {
-                const cls = (node.properties.class as string | undefined) ?? '';
-                node.properties.class = cls ? `${cls} hl-line` : 'hl-line';
-              }
+              if (!highlightLines.includes(lineNum)) return;
+              const cls = (node.properties.class as string | undefined) ?? '';
+              node.properties.class = cls ? `${cls} hl-line` : 'hl-line';
             },
-          }] : []),
+          },
+
         ],
       });
 
@@ -168,13 +166,17 @@ export default function CodePanel({
     container.querySelectorAll(sel).forEach(el => el.classList.add('str-chip--active'));
   }, [html, activeUtf8Index, activeConstTable]);
 
+  // ─── Highlight lines (DOM mutation, no Shiki re-run) ─────────────────────
+
+
   // ─── Scroll to highlight line ──────────────────────────────────────────────
 
   useEffect(() => {
     if (!highlightLines.length || !containerRef.current || html === null) return;
     requestAnimationFrame(() => {
-      containerRef.current?.querySelector('.hl-line')
-        ?.scrollIntoView({ block: 'center', behavior: 'instant' });
+      const codeChildren = containerRef.current?.querySelector('code')?.children;
+      if (!codeChildren) return;
+      codeChildren[highlightLines[0] - 1]?.scrollIntoView({ block: 'center', behavior: 'instant' });
     });
   }, [html, highlightLines]);
 

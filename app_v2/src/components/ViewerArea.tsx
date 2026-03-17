@@ -78,6 +78,11 @@ interface ContentState {
   loadingLoc: boolean;
 }
 
+interface FileIdentity {
+  jarName: string;
+  filePath: string;
+}
+
 export default function ViewerArea({
   jarName,
   filePath,
@@ -92,10 +97,11 @@ export default function ViewerArea({
   // contentFor tracks which file the loaded content belongs to.
   // When filePath changes, loading is derived as true immediately (first render),
   // so the overlay appears before any effect fires.
-  const [contentFor, setContentFor] = useState({ jarName: '', filePath: '' });
+  const [contentFor, setContentFor] = useState<FileIdentity>({ jarName: '', filePath: '' });
   const [content, setContent] = useState<ContentState>({
     original: null, localization: null, loadingOrig: false, loadingLoc: false,
   });
+  const [stringEntriesFor, setStringEntriesFor] = useState<FileIdentity>({ jarName: '', filePath: '' });
   const [stringEntries, setStringEntries] = useState<{
     original: StringEntry[] | null; localization: StringEntry[] | null;
   }>({ original: null, localization: null });
@@ -133,13 +139,22 @@ export default function ViewerArea({
 
   // Load string entries for overlay
   useEffect(() => {
-    if (!jarName || !filePath) { setStringEntries({ original: null, localization: null }); return; }
+    if (!jarName || !filePath) {
+      setStringEntries({ original: null, localization: null });
+      setStringEntriesFor({ jarName: '', filePath: '' });
+      return;
+    }
+    setStringEntries({ original: null, localization: null });
+    let cancelled = false;
     fetch(`/api/files/strings?jar=${encodeURIComponent(jarName)}&class=${encodeURIComponent(filePath)}`)
       .then(r => r.json())
-      .then((d: { original: StringEntry[] | null; localization: StringEntry[] | null }) =>
-        setStringEntries({ original: d.original, localization: d.localization })
-      )
+      .then((d: { original: StringEntry[] | null; localization: StringEntry[] | null }) => {
+        if (cancelled) return;
+        setStringEntries({ original: d.original, localization: d.localization });
+        setStringEntriesFor({ jarName, filePath });
+      })
       .catch(() => undefined);
+    return () => { cancelled = true; };
   }, [jarName, filePath]);
 
   // ─── Split drag ───────────────────────────────────────────────────────────
@@ -182,6 +197,8 @@ export default function ViewerArea({
 
   const loading = contentFor.jarName !== jarName || contentFor.filePath !== filePath
     || content.loadingOrig || content.loadingLoc;
+  const hasCurrentContent = contentFor.jarName === jarName && contentFor.filePath === filePath;
+  const hasCurrentStringEntries = stringEntriesFor.jarName === jarName && stringEntriesFor.filePath === filePath;
 
   return (
     <div
@@ -220,8 +237,8 @@ export default function ViewerArea({
 
         <div className="panel-orig" ref={leftRef}>
           <CodePanel
-            code={content.original}
-            stringEntries={stringEntries.original ?? undefined}
+            code={hasCurrentContent ? content.original : null}
+            stringEntries={hasCurrentStringEntries ? (stringEntries.original ?? undefined) : undefined}
             activeUtf8Index={activeUtf8Index}
             activeConstTable={activeConstTable}
             highlightLines={highlightLines}
@@ -233,8 +250,8 @@ export default function ViewerArea({
 
         <div className="panel-loc" ref={rightRef}>
           <CodePanel
-            code={content.localization}
-            stringEntries={stringEntries.localization ?? undefined}
+            code={hasCurrentContent ? content.localization : null}
+            stringEntries={hasCurrentStringEntries ? (stringEntries.localization ?? undefined) : undefined}
             activeUtf8Index={activeUtf8Index}
             activeConstTable={activeConstTable}
             highlightLines={highlightLines}
