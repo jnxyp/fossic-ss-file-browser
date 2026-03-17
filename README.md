@@ -1,5 +1,7 @@
 # ss-file-browser
 
+> 重要提示：本项目由 LLM vibe coding 生成，代码未经严格审查，请在使用时仔细检查和测试。
+
 `ss-file-browser` 是一个面向 Starsector 汉化流程的只读源码浏览器。  
 它把 ParaTranz 词条、反编译后的 Java 源码、字符串索引和 SQLite 数据库串起来，方便在“词条 <-> 源码上下文”之间快速跳转。
 
