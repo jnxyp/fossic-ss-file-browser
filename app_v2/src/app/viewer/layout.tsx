@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import FileTree from '@/components/FileTree';
 import SearchPanel from '@/components/SearchPanel';
 import StatusFooterBar from '@/components/StatusFooterBar';
@@ -32,13 +32,20 @@ interface Props {
 
 export default function ViewerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [tab, setTab] = useState<Tab>('explorer');
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
   const [autoNavigate, setAutoNavigate] = useState<AutoNavigate | null>(null);
 
-  // Read current jar/file from URL (children will own this state; layout just tracks for tree)
-  const [activeJar, setActiveJar] = useState('');
-  const [activeFile, setActiveFile] = useState('');
+  // Derive activeJar/activeFile directly from the URL — always in sync
+  const { activeJar, activeFile } = useMemo(() => {
+    const after = pathname.split('/viewer/')[1] ?? '';
+    const parts = after.split('/').filter(Boolean);
+    return {
+      activeJar: parts[0] ? decodeURIComponent(parts[0]) : '',
+      activeFile: parts.slice(1).map(p => decodeURIComponent(p)).join('/'),
+    };
+  }, [pathname]);
 
   const layoutRef = useRef<HTMLDivElement>(null);
 
@@ -49,6 +56,17 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
       if (!isNaN(w)) setSidebarWidth(clamp(w, MIN_SIDEBAR, MAX_SIDEBAR));
     } catch { /* */ }
   }, []);
+
+  // Auto-expand tree on initial page load if URL already has a file path
+  const didInitRef = useRef(false);
+  useEffect(() => {
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+    if (activeJar && activeFile) {
+      setAutoNavigate({ jarName: activeJar, filePath: activeFile });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally only on mount
 
   // Sidebar resizer
   function onSidebarDragStart(e: React.PointerEvent<HTMLDivElement>) {
@@ -119,18 +137,7 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
     return () => window.removeEventListener('message', handleMessage);
   }, [router]);
 
-  // Track active file from URL (hash / segment change)
-  useEffect(() => {
-    const parts = window.location.pathname.split('/viewer/')[1]?.split('/') ?? [];
-    if (parts.length > 0) {
-      setActiveJar(decodeURIComponent(parts[0]));
-      setActiveFile(decodeURIComponent(parts.slice(1).join('/')));
-    }
-  });
-
   const handleSelect = useCallback((jarName: string, filePath: string) => {
-    setActiveJar(jarName);
-    setActiveFile(filePath);
     router.push(`/viewer/${encodeURIComponent(jarName)}/${filePath}`);
   }, [router]);
 
@@ -139,8 +146,6 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
       ? `/viewer/${encodeURIComponent(jarName)}/${filePath}?highlightLine=${startLine}`
       : `/viewer/${encodeURIComponent(jarName)}/${filePath}`;
     router.push(url);
-    setActiveJar(jarName);
-    setActiveFile(filePath);
     setTab('explorer');
     setAutoNavigate({ jarName, filePath });
   }, [router]);

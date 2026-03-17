@@ -129,6 +129,7 @@ export default function FileTree({ activeJar, activeFile, onSelect, autoNavigate
   const parentRef = useRef<HTMLDivElement>(null);
   const filesByJarRef = useRef(filesByJar);
   filesByJarRef.current = filesByJar;
+  const pendingScrollRef = useRef<{ jarName: string; filePath: string } | null>(null);
 
   // Load jar list
   useEffect(() => {
@@ -151,7 +152,7 @@ export default function FileTree({ activeJar, activeFile, onSelect, autoNavigate
     }
   }, []);
 
-  // Auto-navigate (from ParaTranz)
+  // Auto-navigate (from ParaTranz or direct URL)
   useEffect(() => {
     if (!autoNavigateTo) return;
     const { jarName, filePath } = autoNavigateTo;
@@ -160,10 +161,10 @@ export default function FileTree({ activeJar, activeFile, onSelect, autoNavigate
       await loadJarFiles(jarName);
       setExpandedJars(prev => new Set(prev).add(jarName));
 
-      // Expand all parent dirs
+      // Expand all parent dirs — loop up to parts.length so the immediate parent is included
       const parts = filePath.split('/');
       const dirsToExpand: string[] = [];
-      for (let i = 1; i < parts.length - 1; i++) {
+      for (let i = 1; i < parts.length; i++) {
         dirsToExpand.push(parts.slice(0, i).join('/'));
       }
       if (dirsToExpand.length > 0) {
@@ -175,6 +176,9 @@ export default function FileTree({ activeJar, activeFile, onSelect, autoNavigate
           return next;
         });
       }
+
+      // Mark scroll target — will fire after items are rebuilt
+      pendingScrollRef.current = { jarName, filePath };
       onAutoNavigateDone?.();
     }
 
@@ -210,17 +214,18 @@ export default function FileTree({ activeJar, activeFile, onSelect, autoNavigate
     overscan: 10,
   });
 
-  // Auto-scroll to active file after navigate
+  // Scroll to pending target once the item appears in the rebuilt list
   useEffect(() => {
-    if (!activeFile || !activeJar) return;
+    const target = pendingScrollRef.current;
+    if (!target) return;
     const idx = items.findIndex(
-      n => n.kind === 'file' && n.jarName === activeJar && n.path === activeFile
+      n => n.kind === 'file' && n.jarName === target.jarName && n.path === target.filePath
     );
     if (idx >= 0) {
+      pendingScrollRef.current = null;
       virtualizer.scrollToIndex(idx, { align: 'center', behavior: 'smooth' });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoNavigateTo]);
+  });
 
   if (loading) return <div className="search-hint">正在加载...</div>;
   if (jars.length === 0) return <div className="search-hint">暂无数据</div>;

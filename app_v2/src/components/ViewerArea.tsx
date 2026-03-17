@@ -87,7 +87,7 @@ export default function ViewerArea({
   highlightLines = [],
   onClickEntry,
 }: Props) {
-  const [mode, setMode] = useState<ViewMode>('localization');
+  const [mode, setMode] = useState<ViewMode>('localization'); // SSR-safe default
   const [split, setSplit] = useState(DEFAULT_SPLIT);
   const [content, setContent] = useState<ContentState>({
     original: null, localization: null, loadingOrig: false, loadingLoc: false,

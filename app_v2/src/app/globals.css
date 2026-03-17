@@ -362,19 +362,41 @@ a { color: inherit; text-decoration: none; }
   tab-size: 4;
 }
 
-.code-viewer code { display: block; }
+.code-viewer code {
+  display: block;
+  counter-reset: line;
+}
 
 .code-viewer .line {
   display: block;
-  padding: 0 16px;
+  padding: 0 16px 0 0;
   position: relative;
+}
+
+/* Line number via CSS counter */
+.code-viewer .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 4em;
+  text-align: right;
+  padding-right: 1.5em;
+  color: var(--text-muted);
+  opacity: 0.4;
+  user-select: none;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Line highlight (ParaTranz navigation target) */
 .code-viewer .line.hl-line {
   background: var(--hl-active-bg);
   border-left: 2px solid var(--hl-active-border);
-  padding-left: calc(16px - 2px);
+}
+
+.code-viewer .line.hl-line::before {
+  opacity: 0.7;
+  padding-left: 2px; /* compensate for 2px border */
 }
 
 /* ─── String overlay ─── */

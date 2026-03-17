@@ -23,7 +23,10 @@ function fmtDate(d: string) {
 
 export default function StatusFooterBar() {
   const [meta, setMeta] = useState<MetaInfo | null>(null);
+  const [mounted, setMounted] = useState(false);
   const { theme, setTheme } = useTheme();
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     fetch('/api/meta')
@@ -32,7 +35,8 @@ export default function StatusFooterBar() {
       .catch(() => undefined);
   }, []);
 
-  const t = THEME_CYCLE[(theme ?? 'system') as keyof typeof THEME_CYCLE] ?? THEME_CYCLE.system;
+  // Use a stable value until mounted to avoid hydration mismatch
+  const t = THEME_CYCLE[(mounted ? theme : 'system') as keyof typeof THEME_CYCLE] ?? THEME_CYCLE.system;
   const rev = meta?.revision ?? '';
   const revUrl = rev
     ? `https://github.com/TruthOriginem/Starsector-Localization-CN/commit/${rev}`
