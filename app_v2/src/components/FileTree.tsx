@@ -311,10 +311,6 @@ export default function FileTree({ activeJar, activeFile, onSelect, autoNavigate
               <span className="tree-expand" />
               <span className="tree-icon" style={{ fontSize: 12 }}>📄</span>
               <span className="tree-name">{node.name}</span>
-              <div className="tree-dot-row">
-                {node.hasOriginal    && <span className="tree-dot orig"  title="原文" />}
-                {node.hasLocalization && <span className="tree-dot loc"   title="译文" />}
-              </div>
             </div>
           );
         })}
