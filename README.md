@@ -2,6 +2,8 @@
 
 `ss-file-browser` 是一个面向 Starsector 汉化工作流的只读源码浏览器。它把 ParaTranz 词条、反编译后的 Java 源码、字符串索引和版本信息串起来，帮助翻译者快速定位上下文，而不需要手动翻找 JAR、类名和常量表。
 
+> 说明：本 README 同时包含“当前已实现的旧架构现状”和“下一阶段重构目标”两部分内容。`TODO / 重构计划` 一节描述的是新版目标设计，不代表这些内容已经落地。
+
 ## 项目目标
 
 - 从 ParaTranz 词条直接跳转到对应 Java 源码行。
@@ -10,6 +12,8 @@
 - 以只读方式浏览源码，避免人工修改产物目录带来的状态漂移。
 
 ## 当前已实现
+
+本节描述当前仓库里已经落地的实现状态，仍然基于文件产物、`manifest.json` 和 A/B 槽位逻辑。
 
 - ParaTranz bookmarklet 联动，基于 `window.open + postMessage` 通信。
 - 使用 `utf8ConstId` 进行字符串定位。
@@ -23,6 +27,8 @@
 - Updater 使用 A/B 槽位切换产物，首次启动会强制刷新一次。
 
 ## 架构概览
+
+本节描述当前版本的目录职责划分；重构后的目标架构请以下方 `TODO / 重构计划` 为准。
 
 - `app/`
   Next.js 16 App Router 应用，同时提供前端界面和 API。
@@ -45,6 +51,8 @@
 
 ## 数据与更新流程
 
+本节描述当前版本的更新链路；SQLite 方案上线后，这里的数据流会发生变化。
+
 1. `updater` 拉取 `TruthOriginem/Starsector-Localization-CN` 仓库的 `master` 分支。
 2. 仓库内 `original/` 和 `localization/` 下的 JAR 会被 CFR 反编译为 zip。
 3. CFR 同时输出每个类的 `.strings.json`，`packager.ts` 会聚合成 jar 级索引。
@@ -59,6 +67,8 @@
 - 不应手动改写 `artifacts/` 中的产物文件，应该通过 `updater` 流程生成。
 
 ## ParaTranz 联动约定
+
+本节描述当前版本已经落地的 ParaTranz -> viewer 联动约定；双向联动和新版协议请以下方 `TODO / 重构计划` 中的描述为准。
 
 - 允许来源：`https://paratranz.cn`
 - bookmarklet 当前只允许在 `https://paratranz.cn/projects/3489` 下启动
@@ -172,9 +182,349 @@ npm run start
 - [`updater/src/lib/packager.ts`](/d:/ProjectsLocal/fossic-ss-file-browser/updater/src/lib/packager.ts)
   聚合 `.strings.json`
 
-## 当前限制与后续方向
+## TODO / 重构计划
 
-- 当前文件树主要面向 `.java` 文件浏览，非 Java 文件的专门视图还没有完成。
-- `CSV`、`JSON`、`TXT` 只读视图仍在计划中。
-- bookmarklet 的 DOM 解析还可以继续补强兜底选择器和错误反馈。
-- 更真实的端到端回归测试仍然值得补上。
+下面这些事项是下一阶段的重点重构方向，目标不是在现有文件产物结构上继续打补丁，而是把数据层、查看器交互和 ParaTranz 双向联动一次理顺。
+
+### 1. 已确认的新版关键决策
+
+- 数据主存储改为 SQLite，第一版使用 `better-sqlite3`。
+- 数据根目录改为 `data/`，正式数据库为 `data/ssfb.sqlite`。
+- `artifacts/`、`manifest.json`、A/B 槽位和聚合 `.strings.json` 不再是新版主流程的数据来源。
+- 第一版只保留最新版本数据，不做历史版本管理。
+- 导入采用“正式表单事务清空后重写”；失败时回滚，旧库保持不变。
+- 临时反编译产物保留最近一次，便于排查。
+- viewer 改为单文件树 + 三态查看器：`原文 / 并列 / 译文`。
+- 左侧侧栏改为 VS Code 风格双 tab：`资源管理器 / 搜索`。
+- 文件树自动展开和自动滚动只在 ParaTranz 导航进入时触发。
+- 高亮继续使用前端 `Shiki`，但词条范围高亮和点击交互由自定义渲染层负责。
+- 搜索至少支持 class 名和 string 内容；结果按文件分组展示。
+- viewer -> bookmarklet 反向定位使用 `FB_NAVIGATE_TO_PARATRANZ_STRING`。
+
+### 2. 数据层改造：从文件产物切换到 SQLite
+
+- 用 SQLite 替代当前以 `artifacts/` 目录和聚合 `.strings.json` 为核心的读取方式。
+- SQLite Node 驱动第一版采用 `better-sqlite3`。
+- `updater` 在拿到 `original` 和 `localization` 的反编译结果后，直接把可查询数据写入数据库，而不是仅写回磁盘文件。
+- 新版统一数据根目录调整为 `data/`，其中：
+  - `data/ssfb.sqlite` 作为正式查询数据库
+  - `data/decompiled/` 保留最近一次反编译临时产物
+  - `data/original/` 和 `data/localization/` 继续承载同步下来的原始输入
+- `artifacts/` 不再作为新版主流程的数据来源，只作为旧架构遗留目录看待。
+- 以“同一个源码文件的 original / localization 大概率一一对应”为前提，重构存储模型，使一次查询可以同时拿到：
+  - 源码文件元数据
+  - original 反编译源码
+  - localization 反编译源码
+  - original 对应 strings 索引
+  - localization 对应 strings 索引
+- 当前确认的 SQLite 基础结构为 4 张表：
+
+#### `source_files`
+
+表示真正用于文件树展示和右侧查看器打开的源码文件节点，一条记录对应一个实际源码文件，例如 `A.java`。  
+如果存在 `A.class` 和 `A$1.class`，它们在这里仍然只对应一条 `A.java` 记录。
+
+- `id INTEGER PRIMARY KEY`
+- `jar_name TEXT NOT NULL`
+- `source_path TEXT NOT NULL`
+- `has_original INTEGER NOT NULL DEFAULT 0`
+- `has_localization INTEGER NOT NULL DEFAULT 0`
+
+约束与用途：
+
+- `UNIQUE (jar_name, source_path)`
+- 文件树基于这张表构建
+- `source_path` 使用实际反编译源码路径，例如 `com/fs/.../A.java`
+- `has_original` / `has_localization` 用于标识该文件在两侧是否存在
+
+#### `file_contents`
+
+表示某个源码文件在某一侧数据集中的具体内容。一条 `source_files` 记录最多对应两条内容记录：`original` 和 `localization`。
+
+- `id INTEGER PRIMARY KEY`
+- `source_file_id INTEGER NOT NULL`
+- `dataset TEXT NOT NULL`
+- `source_code TEXT NOT NULL`
+- `source_hash TEXT`
+
+约束与用途：
+
+- `CHECK (dataset IN ('original', 'localization'))`
+- `UNIQUE (source_file_id, dataset)`
+- `FOREIGN KEY (source_file_id) REFERENCES source_files(id) ON DELETE CASCADE`
+- 某文件如果只存在于一侧，则另一侧没有对应记录
+- 右侧查看器读取 original / localization 源码内容时直接从这里取
+
+#### `string_entries`
+
+表示最新 CFR `strings.json` 中解析出的字符串条目和精确范围。  
+它挂在 `file_contents` 下，而不是直接挂在 `source_files` 下，因为 original 和 localization 两侧的字符串范围信息不保证完全一致。
+
+- `id INTEGER PRIMARY KEY`
+- `file_content_id INTEGER NOT NULL`
+- `owner_class_name TEXT NOT NULL`
+- `cp_index INTEGER`
+- `utf8_index INTEGER NOT NULL`
+- `const_table TEXT NOT NULL DEFAULT ''`
+- `value TEXT NOT NULL`
+- `start_line INTEGER NOT NULL`
+- `start_col INTEGER NOT NULL`
+- `end_line INTEGER NOT NULL`
+- `end_col INTEGER NOT NULL`
+
+约束与用途：
+
+- `FOREIGN KEY (file_content_id) REFERENCES file_contents(id) ON DELETE CASCADE`
+- 建议索引：`(file_content_id, utf8_index, const_table)`
+- 建议索引：`(file_content_id, owner_class_name, utf8_index)`
+- 建议索引：`(file_content_id, start_line, start_col)`
+- `owner_class_name` 保存实际所属 class，例如 `A.class` 或 `A$1.class`
+- `source_files` 层只显示一个 `A.java`，但字符串仍然可以知道自己属于父类还是内部类
+- ParaTranz 导航到 `A$1.class` 中的字符串时，可先归一到 `A.java`，再通过 `owner_class_name + utf8_index (+ const_table)` 精确查询范围
+
+#### `meta`
+
+表示当前数据库中的全局元信息，用于替代 `manifest.json` 承担的轻量状态职责，但不承担历史版本管理。
+
+- `key TEXT PRIMARY KEY`
+- `value TEXT NOT NULL`
+
+当前至少需要支持：
+
+- `revision`
+- `last_updated`
+- `schema_version`
+
+用途：
+
+- 底栏显示当前 revision 和更新时间
+- 标记当前数据库 schema 版本
+- 提供 app 与 updater 的轻量状态读取入口
+
+- 业务扩展信息如字符串标记、人工备注、审核状态暂不进入第一版 schema；本轮重构先只落地上述 4 张基础表，后续再按功能需求补表。
+- 适配最新 CFR `strings.json` 格式变更：原先的 `line` 字段已经被更精细的 `start` / `end` 对象取代，例如：
+
+```json
+{
+  "cp_index": 75,
+  "utf8_index": 74,
+  "const_table": "...",
+  "value": "ui",
+  "start": { "line": 51, "col": 127 },
+  "end": { "line": 51, "col": 130 }
+}
+```
+
+- 新的数据模型和查询接口需要保留这组范围信息，而不是退化回单一行号。
+- 后续高亮能力要从“按行高亮”升级为“按源码范围高亮”，以支持更精细的词条定位。
+- 保留“某个文件只存在于 original 或 localization 一侧”的兼容能力，不能假设所有文件都严格成对出现。
+- `app` 后续应直接查询 SQLite，而不是继续围绕磁盘产物和 manifest 进行状态判断。
+- `updater` 导入流程当前确认采用以下策略：
+  - 如果事务失败，则回滚并保留旧库不变
+  - 反编译临时产物默认保留最近一次，便于排查导入问题
+  - 继续保留定时轮询更新
+  - 同时保留“重启 updater 时强制触发一次导入”的行为，作为当前的手动触发方式
+  - 第一版采用“正式表单事务清空后重写”的方式，不引入 staging 表
+
+### 3. ParaTranz 双向联动与通信协议
+
+- 在现有“ParaTranz -> viewer”跳转基础上，新增“viewer -> ParaTranz”定位能力。
+- 点击代码中的词条后，viewer 需要通过 `FB_NAVIGATE_TO_PARATRANZ_STRING` 向 bookmarklet 发送：
+  - `locator`，格式为 `jarName:className`，例如 `ss_api.jar:A/B/C/D$1.class`
+  - `value`
+  - `utf8ConstId`
+  - `dataset`
+- 词条点击交互需要建立在新的范围索引之上，确保点击的是精确字符串片段，而不是整行文本。
+- `className` 需要保留子类信息，不能在发送时丢失内部类路径。
+- bookmarklet 侧先补一个接收接口，完成 viewer 到脚本端的消息接入。
+- 协议后续补充 `PT_ERROR`，用于 bookmarklet 向 viewer 返回定位失败或页面状态异常。
+- `PT_ACK` 暂列为可选增强项，用于 bookmarklet 在收到定位请求后回传“已接收/开始处理”的轻量确认。
+- ParaTranz 页面上的实际定位逻辑需要参考真实网页结构再实现，目前属于待联调项。
+
+#### 新版通信协议层
+
+新版重构继续使用基于 `window.postMessage` 的双向协议，并沿用以下命名约定：
+
+- `PT_*` 表示 ParaTranz / bookmarklet -> File Browser
+- `FB_*` 表示 File Browser -> ParaTranz / bookmarklet
+
+公共消息结构：
+
+- `protocol`
+  固定为 `ss-file-browser/v1`
+- `type`
+  消息类型
+- `requestId`
+  请求或事件唯一标识
+- `timestamp`
+  可选时间戳
+- `payload`
+  对应消息负载
+
+#### ParaTranz / bookmarklet -> File Browser
+
+`PT_NAVIGATE_TO_STRING`
+
+用途：
+
+- ParaTranz 词条跳转到 viewer 中的源码位置
+
+payload：
+
+- `jarName`
+- `className`
+- `utf8ConstId`
+
+`PT_PING`
+
+用途：
+
+- 轻量心跳或连接探测
+
+`PT_ERROR`
+
+用途：
+
+- bookmarklet 向 viewer 返回错误，例如 ParaTranz 页面状态异常、词条未找到、页面结构变化导致无法定位
+
+payload 建议字段：
+
+- `code`
+- `message`
+- `detail`
+
+`PT_ACK`
+
+用途：
+
+- 可选增强项
+- bookmarklet 收到 `FB_NAVIGATE_TO_PARATRANZ_STRING` 后，回传“已收到 / 已开始处理”
+
+payload 建议字段：
+
+- `accepted`
+- `message`
+
+#### File Browser -> ParaTranz / bookmarklet
+
+`FB_READY`
+
+用途：
+
+- viewer 已打开并可以接收导航消息
+
+payload：
+
+- `connected`
+- `appOrigin`
+- `dataset`
+- `revision`
+
+`FB_ERROR`
+
+用途：
+
+- viewer 向 ParaTranz / bookmarklet 返回协议错误、查询失败或内部错误
+
+payload：
+
+- `code`
+- `message`
+- `detail`
+
+`FB_NAVIGATE_TO_PARATRANZ_STRING`
+
+用途：
+
+- 用户在 viewer 中点击某个字符串片段后，反向请求 ParaTranz 页面定位对应词条
+
+payload：
+
+- `locator`
+  格式为 `jarName:className`，例如 `ss_api.jar:A/B/C/D$1.class`
+- `value`
+  字符串值
+- `utf8ConstId`
+  对应 UTF-8 常量号，例如 `#74`
+- `dataset`
+  `original` 或 `localization`
+
+协议层当前确认的行为约定：
+
+- `className` 或 `locator` 中必须保留完整内部类信息，不能丢失 `$1`、`$Level1` 等子类后缀
+- ParaTranz -> viewer 导航时，以 `jarName + className + utf8ConstId` 为核心定位键
+- viewer -> ParaTranz 导航时，以 `locator + value + utf8ConstId + dataset` 为核心负载
+- `FB_READY` 用于首次握手和重连，不表示用户每次切换文件都要主动广播状态
+- `PT_ERROR` 与 `FB_ERROR` 分别承担双向错误反馈，避免静默失败
+- `PT_ACK` 是可选增强项，不影响第一版主流程
+
+### 4. API 与状态层重写
+
+- `app` 后续应直接查询 SQLite，而不是继续围绕磁盘产物和 manifest 进行状态判断。
+- 文件树、源码内容、字符串范围和状态信息都需要改为从 SQLite 读取。
+- API 设计需要围绕“一个源码文件节点同时返回 original / localization 两侧内容与索引”来组织，而不是继续围绕当前单 dataset API 扩展。
+- `meta` 表将替代当前依赖 `manifest.json` 的 revision / 更新时间读取逻辑。
+- 搜索 API 需要支持 class 名和 string 内容查询，并返回适合按文件分组展示的结果结构。
+
+### 5. 查看器、文件树与搜索重构
+
+- 代码高亮改为前端执行，减少服务端高亮带来的负担。
+- 第一版高亮方案优先沿用 `Shiki`，但职责调整为：
+  - `Shiki` 只负责语法高亮
+  - 词条范围高亮和点击交互由自定义渲染层负责
+- 第一版暂不引入 `Monaco`、`CodeMirror` 这类完整编辑器组件。
+- 文件树改为单一树结构，不再把 `original` 和 `localization` 拆成两个独立数据集入口。
+- 文件树展示逻辑改为 `original ∪ localization` 的并集。
+- 左侧侧栏改为类似 VS Code 的双 tab 结构：
+  - `资源管理器`
+  - `搜索`
+- `资源管理器` tab 展示 union 文件树。
+- `搜索` tab 用于查询项目中的 class 和字符串条目。
+- 由于文件数量较多，文件树实现需要优先考虑性能：
+  - 优先评估现成的高性能前端树组件
+  - 或引入虚拟滚动、按需展开、懒加载等优化手段
+  - 不默认手写完整树渲染实现，避免在大数据量下出现明显卡顿
+- 文件树继续保留“自动展开当前路径”和“将当前文件滚动到顶部附近”的能力，但仅在“从 ParaTranz 收到导航请求”时执行。
+- 如果是用户在 viewer 内手动点击文件树切换文件，则不要自动滚动到顶部，也不要强制触发同样的导航滚动行为。
+- 选择文件后，右侧支持以下查看模式：
+  - 只看 `original`
+  - 只看 `localization`
+  - `original / localization` 并排对照
+- 右侧顶部提供一个三态滑块切换开关，状态分别为：
+  - `原文`
+  - `并列`
+  - `译文`
+- 该开关状态采用全局记忆，不按单个文件分别记忆。
+- 并排模式需要支持同步滚动。
+- 代码区需要支持基于 `start.line/start.col/end.line/end.col` 的更精细词条高亮，而不再只是整行高亮。
+- 只有 `string_entries` 命中的字符串片段可点击；非命中代码区域不参与跳转交互。
+- 当前定位词条使用更明显的高亮，其它可点击词条使用较弱提示，避免页面信息噪音过高。
+- 当文件仅存在于某一侧时：
+  - 有内容的一侧正常显示
+  - 缺失的一侧明确显示“文件缺失”
+- 搜索功能第一版至少需要支持：
+  - 按 class 名搜索
+  - 按 string 内容搜索
+- class 搜索采用包含匹配：
+  - 只要 `keyword in 完整 class 路径` 即视为命中
+  - 同时匹配文件自身的完整 class 路径和字符串条目上的 `ownerClassName`
+- 搜索结果展示形式参考 VS Code：
+  - 先按文件分组
+  - 每个文件组显示文件名、完整路径和命中数
+  - 文件组下展示具体命中摘要
+- 命中摘要在不同场景下应至少包含：
+  - string 搜索：字符串值摘要
+  - class 搜索：命中的 class 名或对应上下文摘要
+- 如果同一个文件在不同数据侧都有命中，结果项需要带侧别标识，例如 `原文` / `译文`。
+- 点击文件组头时，打开对应文件；点击具体命中项时，打开文件并定位到对应命中。
+- 搜索结果点击后，应打开对应源码文件并定位到目标字符串或 class 上下文。
+
+### 6. 配套工作
+
+- 根据 SQLite 落地后的模型，重写文件树、源码内容、字符串索引等 API。
+- 重新梳理缓存策略，避免数据库引入后出现前后端状态不一致。
+- 补充覆盖重构后的测试：
+  - 数据导入与查询测试
+  - 双栏查看与同步滚动测试
+  - ParaTranz 双向消息协议测试
+- 等 ParaTranz 反向定位方案稳定后，再决定是否保留现有 bookmarklet 的部分 DOM 兜底逻辑。
