@@ -164,7 +164,7 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
               onClick={() => setTab('explorer')}
             >
               <span aria-hidden="true">📁</span>
-              <span>资源管理器</span>
+              <span>文件</span>
             </button>
             <button
               type="button"
