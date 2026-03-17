@@ -22,41 +22,63 @@ function saveSplit(v: number) { try { localStorage.setItem(SPLIT_KEY, String(v))
 
 // ─── Sync-scroll hook ─────────────────────────────────────────────────────────
 
-function useSyncScroll(active: boolean) {
+function useSharedCodeScroll() {
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
   const syncing = useRef(false);
+  const scrollState = useRef({ top: 0, left: 0 });
 
-  useEffect(() => {
-    if (!active) return;
+  const getPanes = useCallback(() => {
     const left = leftRef.current?.querySelector<HTMLElement>('.code-pane') ?? null;
     const right = rightRef.current?.querySelector<HTMLElement>('.code-pane') ?? null;
+    return { left, right };
+  }, []);
+
+  const applyScrollState = useCallback(() => {
+    const { left, right } = getPanes();
+    syncing.current = true;
+    if (left) {
+      left.scrollTop = scrollState.current.top;
+      left.scrollLeft = scrollState.current.left;
+    }
+    if (right) {
+      right.scrollTop = scrollState.current.top;
+      right.scrollLeft = scrollState.current.left;
+    }
+    syncing.current = false;
+  }, [getPanes]);
+
+  useEffect(() => {
+    const { left, right } = getPanes();
     if (!left || !right) return;
+    const leftPane = left;
+    const rightPane = right;
 
-    function onLeft() {
-      if (syncing.current || !right) return;
+    function syncFrom(source: HTMLElement, target: HTMLElement) {
+      if (syncing.current) return;
+      scrollState.current = {
+        top: source.scrollTop,
+        left: source.scrollLeft,
+      };
       syncing.current = true;
-      right.scrollTop = left!.scrollTop;
-      right.scrollLeft = left!.scrollLeft;
+      target.scrollTop = scrollState.current.top;
+      target.scrollLeft = scrollState.current.left;
       syncing.current = false;
     }
-    function onRight() {
-      if (syncing.current || !left) return;
-      syncing.current = true;
-      left.scrollTop = right!.scrollTop;
-      left.scrollLeft = right!.scrollLeft;
-      syncing.current = false;
-    }
 
-    left.addEventListener('scroll', onLeft, { passive: true });
-    right.addEventListener('scroll', onRight, { passive: true });
+    function onLeft() { syncFrom(leftPane, rightPane); }
+    function onRight() { syncFrom(rightPane, leftPane); }
+
+    leftPane.addEventListener('scroll', onLeft, { passive: true });
+    rightPane.addEventListener('scroll', onRight, { passive: true });
+    applyScrollState();
     return () => {
-      left.removeEventListener('scroll', onLeft);
-      right.removeEventListener('scroll', onRight);
+      leftPane.removeEventListener('scroll', onLeft);
+      rightPane.removeEventListener('scroll', onRight);
     };
-  }, [active]);
+  }, [applyScrollState, getPanes]);
 
-  return { leftRef, rightRef };
+  return { leftRef, rightRef, applyScrollState };
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -113,7 +135,7 @@ export default function ViewerArea({
   }>({ original: null, localization: null });
 
   const splitContainerRef = useRef<HTMLDivElement>(null);
-  const { leftRef, rightRef } = useSyncScroll(mode === 'parallel');
+  const { leftRef, rightRef, applyScrollState } = useSharedCodeScroll();
 
   function changeMode(m: ViewMode) {
     setMode(m);
@@ -136,6 +158,10 @@ export default function ViewerArea({
       return preferredDataset;
     });
   }, [preferredDataset]);
+
+  useEffect(() => {
+    applyScrollState();
+  }, [mode, applyScrollState]);
 
   // Always fetch both datasets — CSS controls which panel is visible
   const fetchSide = useCallback(async (dataset: Dataset): Promise<string | null> => {
@@ -222,6 +248,11 @@ export default function ViewerArea({
     || content.loadingOrig || content.loadingLoc;
   const hasCurrentContent = contentFor.jarName === jarName && contentFor.filePath === filePath;
   const hasCurrentStringEntries = stringEntriesFor.jarName === jarName && stringEntriesFor.filePath === filePath;
+
+  useEffect(() => {
+    if (!hasCurrentContent) return;
+    applyScrollState();
+  }, [hasCurrentContent, content.original, content.localization, applyScrollState]);
 
   return (
     <div
