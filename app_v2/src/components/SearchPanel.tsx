@@ -1,57 +1,84 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { SearchResult } from '@/lib/types';
-import type { Dataset } from '@/lib/types';
+import type { Dataset, SearchResult } from '@/lib/types';
 
 interface Props {
   onNavigate: (jarName: string, filePath: string, startLine?: number, dataset?: Dataset) => void;
 }
 
 const STEP = 22;
+const SEARCH_DELAY_MS = 300;
 
 export default function SearchPanel({ onNavigate }: Props) {
   const [query, setQuery] = useState('');
-  const [type, setType] = useState<'class' | 'string'>('class');
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const accumulated = useRef(0);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
-    const el = resultsRef.current;
-    if (!el) return;
+    const element = resultsRef.current;
+    if (!element) return;
     function onWheel(e: WheelEvent) {
       e.preventDefault();
       let px = e.deltaY;
       if (e.deltaMode === 1) px *= STEP;
-      if (e.deltaMode === 2) px *= el!.clientHeight;
+      if (e.deltaMode === 2) px *= element!.clientHeight;
       accumulated.current += px;
       const steps = Math.trunc(accumulated.current / STEP);
       if (steps !== 0) {
-        el!.scrollTop += steps * STEP;
+        element!.scrollTop += steps * STEP;
         accumulated.current -= steps * STEP;
       }
     }
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
   }, []);
 
-  async function doSearch(searchType = type) {
-    const q = query.trim();
-    if (!q) return;
-    setLoading(true);
-    setCollapsed(new Set());
-    try {
-      const r = await fetch(`/api/search?q=${encodeURIComponent(q)}&type=${searchType}`);
-      const d: { results: SearchResult[] } = await r.json();
-      setResults(d.results ?? []);
-    } finally {
+  useEffect(() => {
+    const trimmed = query.trim();
+
+    if (!trimmed) {
+      requestIdRef.current += 1;
       setLoading(false);
+      setResults(null);
+      setCollapsed(new Set());
+      return;
     }
-  }
+
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      setCollapsed(new Set());
+      try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
+          signal: controller.signal,
+        });
+        const data: { results: SearchResult[] } = await response.json();
+        if (requestIdRef.current === requestId) {
+          setResults(data.results ?? []);
+        }
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError' && requestIdRef.current === requestId) {
+          setResults([]);
+        }
+      } finally {
+        if (requestIdRef.current === requestId) {
+          setLoading(false);
+        }
+      }
+    }, SEARCH_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
 
   function toggleCollapse(key: string) {
     setCollapsed(prev => {
@@ -65,36 +92,18 @@ export default function SearchPanel({ onNavigate }: Props) {
     <div className="search-panel">
       <div className="search-input-wrap">
         <input
-          ref={inputRef}
           className="search-input"
-          placeholder="搜索..."
+          placeholder="搜索类名或字符串..."
           value={query}
           onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') void doSearch(); }}
         />
-        <div className="search-type-row">
-          <button
-            type="button"
-            className={`search-type-btn${type === 'class' ? ' active' : ''}`}
-            onClick={() => { setType('class'); void doSearch('class'); }}
-          >
-            类名
-          </button>
-          <button
-            type="button"
-            className={`search-type-btn${type === 'string' ? ' active' : ''}`}
-            onClick={() => { setType('string'); void doSearch('string'); }}
-          >
-            字符串
-          </button>
-        </div>
       </div>
 
       <div className="search-results" ref={resultsRef}>
         {loading && <div className="search-hint">搜索中...</div>}
 
         {!loading && results === null && (
-          <div className="search-hint">输入关键词后按 Enter</div>
+          <div className="search-hint">输入类名或字符串进行搜索</div>
         )}
 
         {!loading && results !== null && results.length === 0 && (
@@ -130,10 +139,13 @@ export default function SearchPanel({ onNavigate }: Props) {
 
               {!isCollapsed && group.matches.map((m, i) => (
                 <div
-                  key={i}
+                  key={`${m.type}-${m.dataset ?? 'none'}-${m.startLine ?? 0}-${m.utf8Index ?? i}-${i}`}
                   className="search-match-item"
                   onClick={() => onNavigate(group.jarName, group.sourcePath, m.startLine, m.dataset)}
                 >
+                  <span className={`search-kind-badge ${m.type}`}>
+                    {m.type === 'class' ? '类名' : '字符串'}
+                  </span>
                   {m.dataset && (
                     <span className={`dataset-badge ${m.dataset}`}>
                       {m.dataset === 'original' ? '原文' : '译文'}

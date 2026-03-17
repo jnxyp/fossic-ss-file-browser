@@ -1,0 +1,40 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run app_v2",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}/app_v2",
+      "env": {
+        "DATA_ROOT": "${workspaceFolder}/data",
+        "PORT": "3000"
+      }
+    },
+    {
+      "name": "Run updater_v2",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run start",
+      "cwd": "${workspaceFolder}/updater_v2",
+      "env": {
+        "DATA_ROOT": "${workspaceFolder}/data",
+        "APP_INTERNAL_URL": "http://localhost:3000",
+        "CFR_JAR": "${workspaceFolder}/tools/cfr.jar",
+        "WORK_DIR": "${workspaceFolder}/tmp/ss-repo",
+        "SYNC_INTERVAL": "600"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Run app_v2 + updater_v2",
+      "configurations": [
+        "Run app_v2",
+        "Run updater_v2"
+      ],
+      "stopAll": true
+    }
+  ]
+}

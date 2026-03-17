@@ -5,50 +5,48 @@ import type { SearchResult, SearchMatch } from '@/lib/types';
 const MAX_RESULTS = 200;
 
 /**
- * GET /api/search?q=&type=class|string
+ * GET /api/search?q=
  * → { results: SearchResult[] }
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q')?.trim() ?? '';
-  const type = searchParams.get('type') as 'class' | 'string' | null;
 
-  if (!q || (type !== 'class' && type !== 'string')) {
+  if (!q) {
     return NextResponse.json({ results: [] });
   }
 
   try {
     const db = getDb();
     const like = `%${q}%`;
+    const classRows = db.prepare(`
+      SELECT DISTINCT
+        sf.jar_name,
+        sf.source_path,
+        sf.has_original,
+        sf.has_localization
+      FROM source_files sf
+      LEFT JOIN file_contents fc ON fc.source_file_id = sf.id
+      LEFT JOIN string_entries se ON se.file_content_id = fc.id
+      WHERE sf.source_path LIKE ?
+         OR se.owner_class_name LIKE ?
+      ORDER BY sf.jar_name, sf.source_path
+      LIMIT ?
+    `).all(like, like, MAX_RESULTS) as Array<{
+      jar_name: string; source_path: string;
+      has_original: number; has_localization: number;
+    }>;
 
-    if (type === 'class') {
-      // Match against source_path (file path) or owner_class_name in string_entries
-      const rows = db.prepare(`
-        SELECT DISTINCT sf.jar_name, sf.source_path, sf.has_original, sf.has_localization
-        FROM source_files sf
-        WHERE sf.source_path LIKE ?
-        ORDER BY sf.jar_name, sf.source_path
-        LIMIT ?
-      `).all(like, MAX_RESULTS) as Array<{
-        jar_name: string; source_path: string;
-        has_original: number; has_localization: number;
-      }>;
-
-      const results: SearchResult[] = rows.map(r => ({
-        jarName: r.jar_name,
-        sourcePath: r.source_path,
-        hasOriginal: r.has_original === 1,
-        hasLocalization: r.has_localization === 1,
-        matches: [{ type: 'class', matchedPath: r.source_path }] satisfies SearchMatch[],
-      }));
-      return NextResponse.json({ results });
-    }
-
-    // type === 'string'
-    const rows = db.prepare(`
+    const stringRows = db.prepare(`
       SELECT
-        sf.jar_name, sf.source_path, sf.has_original, sf.has_localization,
-        se.value, se.utf8_index, se.owner_class_name, se.start_line,
+        sf.jar_name,
+        sf.source_path,
+        sf.has_original,
+        sf.has_localization,
+        se.value,
+        se.utf8_index,
+        se.owner_class_name,
+        se.start_line,
         fc.dataset
       FROM string_entries se
       JOIN file_contents fc ON se.file_content_id = fc.id
@@ -64,9 +62,20 @@ export async function GET(request: Request) {
       dataset: string;
     }>;
 
-    // Group by jar+path
     const map = new Map<string, SearchResult>();
-    for (const r of rows) {
+
+    for (const r of classRows) {
+      const key = `${r.jar_name}\0${r.source_path}`;
+      map.set(key, {
+        jarName: r.jar_name,
+        sourcePath: r.source_path,
+        hasOriginal: r.has_original === 1,
+        hasLocalization: r.has_localization === 1,
+        matches: [{ type: 'class', matchedPath: r.source_path }] satisfies SearchMatch[],
+      });
+    }
+
+    for (const r of stringRows) {
       const key = `${r.jar_name}\0${r.source_path}`;
       if (!map.has(key)) {
         map.set(key, {

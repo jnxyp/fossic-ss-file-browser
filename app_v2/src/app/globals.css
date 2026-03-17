@@ -559,21 +559,10 @@ a { color: inherit; text-decoration: none; }
 .search-input:focus { border-color: var(--accent-dim); }
 .search-input::placeholder { color: var(--text-muted); }
 
-.search-type-row { display: flex; gap: 4px; }
-
-.search-type-btn {
-  flex: 1;
-  height: 22px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
+.search-auto-hint {
   color: var(--text-muted);
   font-size: 11px;
-  cursor: pointer;
-  transition: background 100ms, color 100ms, border-color 100ms;
 }
-.search-type-btn:hover { color: var(--text); border-color: var(--accent-dim); }
-.search-type-btn.active { background: var(--focus-bg); color: var(--accent); border-color: var(--active-border); }
 
 .search-hint { padding: 8px 12px; color: var(--text-muted); font-size: 12px; }
 
@@ -618,6 +607,14 @@ a { color: inherit; text-decoration: none; }
   flex: 1;
 }
 .search-match-meta { color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
+.search-kind-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.search-kind-badge.class { background: rgba(79, 193, 255, 0.15); color: var(--accent); }
+.search-kind-badge.string { background: rgba(255, 198, 109, 0.15); color: #ffc66d; }
 .dataset-badge {
   font-size: 10px;
   padding: 1px 5px;
