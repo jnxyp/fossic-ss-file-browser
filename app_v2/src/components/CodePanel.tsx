@@ -84,20 +84,19 @@ export default function CodePanel({
               const lineEntries = entriesByLine.get(line);
               if (!lineEntries) return;
 
-              // Resolve text content length of this token
+              // Resolve text content of this token
               const text = (node.children as Array<{ type: string; value?: string }>)
                 .filter(c => c.type === 'text')
                 .map(c => c.value ?? '')
                 .join('');
               if (!text) return;
 
-              // Match tokens whose start col falls within [startCol-1, endCol).
-              // startCol = first content char (opening quote is at startCol-1).
-              // endCol   = exclusive end (one past closing quote).
-              // Checking col >= startCol-1 ensures the opening quote token is included,
-              // while col < endCol excludes tokens that start after the string ends.
+              // Use range overlap: token [col, col+len) overlaps entry [startCol-1, endCol).
+              // The tokenizer sometimes bundles a leading space with the next token (e.g. " \"str\""),
+              // so a plain col >= startCol-1 check can miss the token.
+              const tokenEnd = col + text.length;
               for (const entry of lineEntries) {
-                if (col >= entry.startCol - 1 && col < entry.endCol) {
+                if (col < entry.endCol && tokenEnd > entry.startCol - 1) {
                   const cls = (node.properties.class as string | undefined) ?? '';
                   node.properties.class = cls ? `${cls} str-chip` : 'str-chip';
                   node.properties['data-str-id'] = String(entry.id);
