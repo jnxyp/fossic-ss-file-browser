@@ -1,27 +1,27 @@
 services:
   app:
     build:
-      context: ./app
+      context: ./app_v2
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
     volumes:
-      - ./artifacts:/app/artifacts
+      - ./data:/app/data
     environment:
-      - DATA_ROOT=/app/artifacts
+      - DATA_ROOT=/app/data
       - NODE_ENV=production
     networks:
       - ss-network
 
   updater:
     build:
-      context: ./updater
+      context: ./updater_v2
       dockerfile: Dockerfile
     volumes:
-      - ./artifacts:/app/artifacts
+      - ./data:/app/data
       - ./tools:/app/tools:ro
     environment:
-      - DATA_ROOT=/app/artifacts
+      - DATA_ROOT=/app/data
       - APP_INTERNAL_URL=http://app:3000
       - SYNC_INTERVAL=600
     networks:
