@@ -328,18 +328,17 @@ npm run start
 
 ### 3. ParaTranz 双向联动与通信协议
 
-- 在现有“ParaTranz -> viewer”跳转基础上，新增“viewer -> ParaTranz”定位能力。
-- 点击代码中的词条后，viewer 需要通过 `FB_NAVIGATE_TO_PARATRANZ_STRING` 向 bookmarklet 发送：
-  - `locator`，格式为 `jarName:className`，例如 `ss_api.jar:A/B/C/D$1.class`
-  - `value`
-  - `utf8ConstId`
-  - `dataset`
-- 词条点击交互需要建立在新的范围索引之上，确保点击的是精确字符串片段，而不是整行文本。
-- `className` 需要保留子类信息，不能在发送时丢失内部类路径。
-- bookmarklet 侧先补一个接收接口，完成 viewer 到脚本端的消息接入。
-- 协议后续补充 `PT_ERROR`，用于 bookmarklet 向 viewer 返回定位失败或页面状态异常。
-- `PT_ACK` 暂列为可选增强项，用于 bookmarklet 在收到定位请求后回传“已接收/开始处理”的轻量确认。
-- ParaTranz 页面上的实际定位逻辑需要参考真实网页结构再实现，目前属于待联调项。
+- 当前状态：
+  - `ParaTranz -> viewer` 已落地。
+  - `viewer -> ParaTranz` 已在 `app_v2` 中落地，点击代码中的已提取字符串后，会通过 `FB_NAVIGATE_TO_PARATRANZ_STRING` 反向请求 bookmarklet 定位词条。
+  - viewer 当前发送的 `locator` 使用完整 class 名，格式为 `jarName:className`，并保留内部类后缀与 `.class`，例如 `ss_api.jar:A/B/C/D$1.class`。
+  - bookmarklet 当前搜索时会把完整 `locator` 归一到父类搜索键，例如 `ss_api.jar:A/B/C/D`；精确匹配词条时继续使用完整 class 名。
+  - bookmarklet 已实现 `FB_NAVIGATE_TO_PARATRANZ_STRING` 接收、`PT_ERROR` 返回，以及 `PT_ACK` 成功确认。
+  - bookmarklet 当前已实现窗口认领、`PT_PING` / `FB_READY` 握手、分页放大、切换到“全部”、按 `key` 搜索、以及在左侧词条列表中点击目标项。
+- 剩余工作：
+  - 将当前 bookmarklet 中的调试输出整理为可默认关闭的正式行为，并补充更稳定的失败提示。
+  - 评估 viewer 是否需要显式消费 `PT_ACK` / `PT_ERROR`，例如 toast、状态提示或调试面板。
+  - 继续观察 ParaTranz 页面结构变化风险，决定是否保留现有 DOM 兜底逻辑，或进一步收敛到更稳定的页面接口。
 
 #### 新版通信协议层
 
@@ -397,8 +396,7 @@ payload 建议字段：
 
 用途：
 
-- 可选增强项
-- bookmarklet 收到 `FB_NAVIGATE_TO_PARATRANZ_STRING` 后，回传“已收到 / 已开始处理”
+- bookmarklet 收到 `FB_NAVIGATE_TO_PARATRANZ_STRING` 并成功定位后，回传轻量确认
 
 payload 建议字段：
 
@@ -441,7 +439,7 @@ payload：
 payload：
 
 - `locator`
-  格式为 `jarName:className`，例如 `ss_api.jar:A/B/C/D$1.class`
+  格式为 `jarName:className`，其中 `className` 为完整 class 名并保留 `.class` 与内部类后缀，例如 `ss_api.jar:A/B/C/D$1.class`
 - `value`
   字符串值
 - `utf8ConstId`
@@ -452,11 +450,12 @@ payload：
 协议层当前确认的行为约定：
 
 - `className` 或 `locator` 中必须保留完整内部类信息，不能丢失 `$1`、`$Level1` 等子类后缀
+- bookmarklet 搜索 ParaTranz 列表时，使用由完整 `locator` 归一得到的父类搜索键；精确匹配列表项时使用完整 `locator`
 - ParaTranz -> viewer 导航时，以 `jarName + className + utf8ConstId` 为核心定位键
 - viewer -> ParaTranz 导航时，以 `locator + value + utf8ConstId + dataset` 为核心负载
 - `FB_READY` 用于首次握手和重连，不表示用户每次切换文件都要主动广播状态
 - `PT_ERROR` 与 `FB_ERROR` 分别承担双向错误反馈，避免静默失败
-- `PT_ACK` 是可选增强项，不影响第一版主流程
+- `PT_ACK` 已可用，用于 bookmarklet 成功定位后回传轻量确认；viewer 侧暂未消费该确认
 
 ### 4. API 与状态层重写
 
