@@ -1,10 +1,11 @@
 import path from 'path';
 import { logger } from './logger';
 import { getLatestCommitSha } from './github';
-import { sync, getJarPaths } from './git-sync';
+import { sync, getJarPaths, getParatranzMapPath } from './git-sync';
 import { decompile } from './decompile';
 import { openDb, initSchema, clearData, SCHEMA_VERSION, type Database } from './db';
 import { importZipToDb } from './importer';
+import { loadParatranzJarTargets, importParatranzJarTargets, applyParatranzMatches } from './paratranz';
 import { notifyApp } from './notify';
 
 const DATA_ROOT = process.env.DATA_ROOT || '/app/data';
@@ -53,6 +54,7 @@ export async function run(force = false): Promise<void> {
     // 2. Git 同步
     // ------------------------------------------------------------------
     sync();
+    const paratranzTargets = loadParatranzJarTargets(getParatranzMapPath());
 
     // ------------------------------------------------------------------
     // 3. 反编译阶段（不动 DB，失败直接 throw）
@@ -82,6 +84,7 @@ export async function run(force = false): Promise<void> {
 
     const importAll = db.transaction(() => {
       clearData(db);
+      importParatranzJarTargets(db, paratranzTargets);
 
       for (const type of TYPES) {
         for (const { name, zipPath } of jarMap[type]) {
@@ -89,6 +92,8 @@ export async function run(force = false): Promise<void> {
           importZipToDb(db, zipPath, name, type);
         }
       }
+
+      applyParatranzMatches(db);
 
       db.prepare(`
         INSERT OR REPLACE INTO meta (key, value) VALUES

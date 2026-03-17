@@ -4,7 +4,7 @@ import path from 'path';
 
 export type { Database };
 
-export const SCHEMA_VERSION = '1';
+export const SCHEMA_VERSION = '2';
 
 /**
  * 打开（或创建）SQLite 数据库，确保父目录存在。
@@ -66,6 +66,29 @@ export function initSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_se_content_range
       ON string_entries (file_content_id, start_line, start_col);
 
+    CREATE TABLE IF NOT EXISTS paratranz_jar_targets (
+      id               INTEGER PRIMARY KEY,
+      jar_name         TEXT    NOT NULL,
+      owner_class_name TEXT    NOT NULL,
+      value            TEXT    NOT NULL,
+      source_map_path  TEXT    NOT NULL DEFAULT '',
+      UNIQUE (jar_name, owner_class_name, value)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_pjt_lookup
+      ON paratranz_jar_targets (jar_name, owner_class_name, value);
+
+    CREATE TABLE IF NOT EXISTS string_entry_paratranz (
+      string_entry_id     INTEGER PRIMARY KEY,
+      paratranz_target_id INTEGER NOT NULL,
+      match_method        TEXT    NOT NULL CHECK (match_method IN ('original_value', 'propagated')),
+      FOREIGN KEY (string_entry_id) REFERENCES string_entries(id) ON DELETE CASCADE,
+      FOREIGN KEY (paratranz_target_id) REFERENCES paratranz_jar_targets(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sep_target
+      ON string_entry_paratranz (paratranz_target_id);
+
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -79,6 +102,7 @@ export function initSchema(db: Database.Database): void {
  */
 export function clearData(db: Database.Database): void {
   db.exec(`
+    DELETE FROM paratranz_jar_targets;
     DELETE FROM source_files;
     DELETE FROM meta WHERE key != 'schema_version';
   `);
