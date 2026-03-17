@@ -20,6 +20,7 @@ type DbRow = {
   start_col: number;
   end_line: number;
   end_col: number;
+  included_by_paratranz: number;
 };
 
 function rowToEntry(r: DbRow): StringEntry {
@@ -34,14 +35,17 @@ function rowToEntry(r: DbRow): StringEntry {
     startCol: r.start_col,
     endLine: r.end_line,
     endCol: r.end_col,
+    includedByParatranz: r.included_by_paratranz === 1,
   };
 }
 
 const STMT = `
   SELECT se.id, se.owner_class_name, se.cp_index, se.utf8_index,
          se.const_table, se.value,
-         se.start_line, se.start_col, se.end_line, se.end_col
+         se.start_line, se.start_col, se.end_line, se.end_col,
+         1 AS included_by_paratranz
   FROM string_entries se
+  JOIN string_entry_paratranz sep ON sep.string_entry_id = se.id
   JOIN file_contents fc ON se.file_content_id = fc.id
   JOIN source_files sf ON fc.source_file_id = sf.id
   WHERE sf.jar_name = ? AND sf.source_path = ? AND fc.dataset = ?

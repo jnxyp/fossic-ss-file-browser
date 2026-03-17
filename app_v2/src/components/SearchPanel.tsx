@@ -110,6 +110,21 @@ export default function SearchPanel({ onNavigate }: Props) {
     });
   }
 
+  function sortStringMatches(matches: Array<SearchMatch & { type: 'string' }>) {
+    return [...matches].sort((a, b) => {
+      const includedDelta = Number(b.includedByParatranz === true) - Number(a.includedByParatranz === true);
+      if (includedDelta !== 0) return includedDelta;
+
+      const datasetDelta = (a.dataset ?? '').localeCompare(b.dataset ?? '');
+      if (datasetDelta !== 0) return datasetDelta;
+
+      const lineDelta = (a.startLine ?? Number.MAX_SAFE_INTEGER) - (b.startLine ?? Number.MAX_SAFE_INTEGER);
+      if (lineDelta !== 0) return lineDelta;
+
+      return (a.value ?? '').localeCompare(b.value ?? '');
+    });
+  }
+
   return (
     <div className="search-panel">
       <div className="search-input-wrap">
@@ -136,7 +151,9 @@ export default function SearchPanel({ onNavigate }: Props) {
           const key = `${group.jarName}\0${group.sourcePath}`;
           const isCollapsed = collapsed.has(key);
           const fileName = group.sourcePath.split('/').pop() ?? group.sourcePath;
-          const stringMatches = group.matches.filter((m): m is SearchMatch & { type: 'string' } => m.type === 'string');
+          const stringMatches = sortStringMatches(
+            group.matches.filter((m): m is SearchMatch & { type: 'string' } => m.type === 'string')
+          );
 
           return (
             <div key={key} className="search-group">
@@ -183,6 +200,7 @@ export default function SearchPanel({ onNavigate }: Props) {
                       {m.dataset === 'original' ? '原文' : '译文'}
                     </span>
                   )}
+                  {m.includedByParatranz && <span className="extract-badge">已提取</span>}
                   <span className="search-match-value" title={m.value ?? m.matchedPath}>
                     {m.value ?? m.matchedPath ?? '—'}
                   </span>

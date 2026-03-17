@@ -25,6 +25,7 @@ export interface StringEntry {
   startCol: number;
   endLine: number;
   endCol: number;
+  includedByParatranz: boolean;
 }
 
 export interface MetaInfo {
@@ -41,6 +42,7 @@ export interface SearchMatch {
   utf8Index?: number;
   ownerClassName?: string;
   startLine?: number;
+  includedByParatranz?: boolean;
 }
 
 export interface SearchResult {

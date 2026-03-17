@@ -47,12 +47,16 @@ export async function GET(request: Request) {
         se.utf8_index,
         se.owner_class_name,
         se.start_line,
-        fc.dataset
+        fc.dataset,
+        CASE WHEN sep.string_entry_id IS NULL THEN 0 ELSE 1 END AS included_by_paratranz
       FROM string_entries se
       JOIN file_contents fc ON se.file_content_id = fc.id
       JOIN source_files sf ON fc.source_file_id = sf.id
+      LEFT JOIN string_entry_paratranz sep ON sep.string_entry_id = se.id
       WHERE se.value LIKE ?
-      ORDER BY sf.jar_name, sf.source_path, fc.dataset, se.start_line
+      ORDER BY sf.jar_name, sf.source_path,
+               CASE WHEN sep.string_entry_id IS NULL THEN 1 ELSE 0 END,
+               fc.dataset, se.start_line
       LIMIT ?
     `).all(like, MAX_RESULTS) as Array<{
       jar_name: string; source_path: string;
@@ -60,6 +64,7 @@ export async function GET(request: Request) {
       value: string; utf8_index: number;
       owner_class_name: string; start_line: number;
       dataset: string;
+      included_by_paratranz: number;
     }>;
 
     const map = new Map<string, SearchResult>();
@@ -93,6 +98,7 @@ export async function GET(request: Request) {
         utf8Index: r.utf8_index,
         ownerClassName: r.owner_class_name,
         startLine: r.start_line,
+        includedByParatranz: r.included_by_paratranz === 1,
       });
     }
 
