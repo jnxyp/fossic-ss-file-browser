@@ -25,6 +25,7 @@
   var WINDOW_CHECK_INTERVAL_MS = 1500;
   var HANDSHAKE_TIMEOUT_MS = 800;
   var VIEWER_WINDOW_NAME = '__ssfb_viewer';
+  var DEBUG_LOGGING = true;
   var VIEWER_WINDOW_FEATURES = [
     'popup=yes',
     'resizable=yes',
@@ -66,6 +67,19 @@
   var hasCompletedHandshake = false;
   var PAGE_SIZE = '800';
   var NAVIGATION_TIMEOUT_MS = 12000;
+
+  function debugLog() {
+    if (!DEBUG_LOGGING) {
+      return;
+    }
+    try {
+      var args = Array.prototype.slice.call(arguments);
+      args.unshift('[ssfb-pt]');
+      console.log.apply(console, args);
+    } catch {
+      // Ignore console failures.
+    }
+  }
 
   function loadAutoFollow() {
     try {
@@ -386,9 +400,16 @@
     return String(locator || '').replace(/\.class$/, '');
   }
 
+  function getSearchLocator(locator) {
+    var value = String(locator || '');
+    value = value.replace(/\.class$/, '');
+    value = value.replace(/\$[^/$]+$/, '');
+    return value;
+  }
+
   function currentPageMatchesLocator(locator) {
     var currentLocator = normalizeLocatorForSearch(new URL(window.location.href).searchParams.get('key'));
-    return currentLocator === normalizeLocatorForSearch(locator);
+    return currentLocator === getSearchLocator(locator);
   }
 
   function hasRowsForLocator(locator) {
@@ -439,7 +460,15 @@
   }
 
   async function searchByLocator(locator) {
+    debugLog('searchByLocator:start', {
+      locator: locator,
+      searchLocator: getSearchLocator(locator),
+      currentKey: new URL(window.location.href).searchParams.get('key'),
+      pageMatches: currentPageMatchesLocator(locator),
+    });
+
     if (currentPageMatchesLocator(locator)) {
+      debugLog('searchByLocator:skip', { locator: locator });
       return;
     }
 
@@ -451,10 +480,17 @@
 
     var searchVm = input.__vue__ && input.__vue__.$parent;
     if (searchVm && typeof searchVm.search === 'function') {
+      debugLog('searchByLocator:use-vue-search', {
+        locator: locator,
+        searchLocator: getSearchLocator(locator),
+        previousKeyword: searchVm.keyword,
+        previousSearchKey: searchVm.searchKey,
+      });
       searchVm.searchKey = 'key';
-      searchVm.keyword = locator;
+      searchVm.keyword = getSearchLocator(locator);
       searchVm.search();
     } else {
+      debugLog('searchByLocator:use-dom-fallback', { locator: locator });
       setControlValue(select, 'key');
       select.dispatchEvent(new Event('input', { bubbles: true }));
       select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -466,11 +502,11 @@
       if (typeof input.select === 'function') {
         input.select();
       }
-      setControlValue(input, locator);
+      setControlValue(input, getSearchLocator(locator));
       input.dispatchEvent(new InputEvent('input', {
         bubbles: true,
         inputType: 'insertText',
-        data: locator,
+        data: getSearchLocator(locator),
       }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
       input.dispatchEvent(new Event('search', { bubbles: true }));
@@ -488,6 +524,12 @@
       return hasRowsForLocator(locator);
     }, NAVIGATION_TIMEOUT_MS);
 
+    debugLog('searchByLocator:done', {
+      locator: locator,
+      currentKey: new URL(window.location.href).searchParams.get('key'),
+      rowCount: getStringRows().length,
+    });
+
     await wait(100);
   }
 
@@ -496,10 +538,21 @@
     var exactOriginal = null;
     var exactTranslation = null;
     var exactEither = null;
+    var candidates = [];
+    var locatorPrefix = String(payload.locator || '') + '#';
 
     for (var i = 0; i < rows.length; i++) {
       var entry = rows[i];
-      if (entry.locatorAndValue.indexOf(payload.locator + '#') !== 0) continue;
+      if (entry.locatorAndValue.indexOf(locatorPrefix) !== 0) continue;
+
+      candidates.push({
+        title: entry.title,
+        locatorAndValue: entry.locatorAndValue,
+        original: entry.original,
+        translation: entry.translation,
+        originalMatches: entry.original === payload.value,
+        translationMatches: entry.translation === payload.value,
+      });
 
       if (entry.original === payload.value) {
         if (!exactOriginal) exactOriginal = entry;
@@ -511,12 +564,30 @@
       }
     }
 
+    debugLog('findMatchingRow', {
+      payload: payload,
+      candidateCount: candidates.length,
+      candidates: candidates,
+      chosen:
+        payload.dataset === 'original' && exactOriginal ? exactOriginal.title :
+        payload.dataset === 'localization' && exactTranslation ? exactTranslation.title :
+        exactEither ? exactEither.title : null,
+    });
+
     if (payload.dataset === 'original' && exactOriginal) return exactOriginal;
     if (payload.dataset === 'localization' && exactTranslation) return exactTranslation;
     return exactEither;
   }
 
   async function navigateToParatranzString(requestId, payload) {
+    debugLog('navigateToParatranzString:start', {
+      requestId: requestId,
+      payload: payload,
+      href: window.location.href,
+      currentKey: new URL(window.location.href).searchParams.get('key'),
+      rowCount: getStringRows().length,
+    });
+
     if (!isStringsPage()) {
       throw new Error('NOT_ON_STRINGS_PAGE');
     }
@@ -527,6 +598,10 @@
     var match = findMatchingRow(payload);
     if (!match || !match.row) {
       if (currentPageMatchesLocator(payload.locator)) {
+        debugLog('navigateToParatranzString:wait-existing-list', {
+          locator: payload.locator,
+          rowCount: getStringRows().length,
+        });
         await waitFor(function () {
           return getStringRows().length > 0;
         }, NAVIGATION_TIMEOUT_MS);
@@ -535,6 +610,10 @@
     }
 
     if ((!match || !match.row) && !currentPageMatchesLocator(payload.locator)) {
+      debugLog('navigateToParatranzString:search-needed', {
+        locator: payload.locator,
+        currentKey: new URL(window.location.href).searchParams.get('key'),
+      });
       await ensurePageSize();
       await ensureAllStages();
       await searchByLocator(payload.locator);
@@ -545,9 +624,21 @@
     }
 
     if (!match || !match.row) {
+      debugLog('navigateToParatranzString:no-match', {
+        requestId: requestId,
+        payload: payload,
+        href: window.location.href,
+        rowCount: getStringRows().length,
+      });
       throw new Error('STRING_ROW_NOT_FOUND');
     }
 
+    debugLog('navigateToParatranzString:click', {
+      requestId: requestId,
+      title: match.title,
+      original: match.original,
+      translation: match.translation,
+    });
     match.row.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 
     await waitFor(function () {
@@ -557,6 +648,10 @@
       return parsed.title === match.title;
     }, NAVIGATION_TIMEOUT_MS);
 
+    debugLog('navigateToParatranzString:success', {
+      requestId: requestId,
+      activeTitle: document.querySelector('.string-list .row.string.active') ? document.querySelector('.string-list .row.string.active').getAttribute('title') : null,
+    });
     sendAck(requestId, '已定位到 ParaTranz 词条');
   }
 
@@ -654,8 +749,17 @@
 
     if (message.type === 'FB_NAVIGATE_TO_PARATRANZ_STRING') {
       appOrigin = event.origin;
+      debugLog('handleMessage:FB_NAVIGATE_TO_PARATRANZ_STRING', {
+        requestId: message.requestId,
+        payload: message.payload,
+      });
       navigateToParatranzString(message.requestId, message.payload).catch(function (err) {
         var reason = err && err.message ? err.message : String(err);
+        debugLog('handleMessage:FB_NAVIGATE_TO_PARATRANZ_STRING:error', {
+          requestId: message.requestId,
+          payload: message.payload,
+          reason: reason,
+        });
         sendError(
           message.requestId,
           reason,

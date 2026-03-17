@@ -86,7 +86,7 @@ export default function ViewerPage() {
   // Click on a string → send FB_NAVIGATE_TO_PARATRANZ_STRING
   const handleClickEntry = useCallback((entry: StringEntry, dataset: Dataset) => {
     if (!window.opener) return;
-    const ownerClass = entry.ownerClassName;
+    const ownerClass = `${entry.ownerClassName}${entry.constTable || ''}.class`;
     const locator = `${jarName}:${ownerClass}`;
     const payload: NavigateToParatranzPayload = {
       locator,
