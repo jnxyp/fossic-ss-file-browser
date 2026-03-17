@@ -40,6 +40,15 @@
   --hl-string-border: rgba(106, 135, 89, 0.55);
   --hl-current-bg:    rgba(255, 198, 109, 0.22);
   --hl-current-border:#ffc66d;
+  --badge-original-bg: rgba(156, 220, 254, 0.15);
+  --badge-original-fg: #9cdcfe;
+  --badge-original-border: rgba(156, 220, 254, 0.26);
+  --badge-localization-bg: rgba(78, 201, 176, 0.15);
+  --badge-localization-fg: #4ec9b0;
+  --badge-localization-border: rgba(78, 201, 176, 0.28);
+  --badge-extract-bg: rgba(255, 198, 109, 0.16);
+  --badge-extract-fg: #ffc66d;
+  --badge-extract-border: rgba(255, 198, 109, 0.28);
 
   /* Misc */
   --scrollbar-thumb:  rgba(121, 121, 121, 0.4);
@@ -83,6 +92,15 @@
   --hl-string-border: rgba(80, 130, 74, 0.50);
   --hl-current-bg:    rgba(200, 120, 0, 0.14);
   --hl-current-border:#c87800;
+  --badge-original-bg: rgba(0, 95, 184, 0.10);
+  --badge-original-fg: #00508f;
+  --badge-original-border: rgba(0, 95, 184, 0.24);
+  --badge-localization-bg: rgba(14, 124, 102, 0.10);
+  --badge-localization-fg: #0c6f5b;
+  --badge-localization-border: rgba(14, 124, 102, 0.22);
+  --badge-extract-bg: rgba(200, 120, 0, 0.12);
+  --badge-extract-fg: #9a5a00;
+  --badge-extract-border: rgba(200, 120, 0, 0.24);
 
   --scrollbar-thumb:  rgba(100, 100, 100, 0.3);
 }
@@ -613,7 +631,7 @@ a { color: inherit; text-decoration: none; }
 .search-match-item {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 3px;
   padding: 3px 8px 3px 24px;
   cursor: pointer;
   font-size: 12px;
@@ -632,16 +650,18 @@ a { color: inherit; text-decoration: none; }
   padding: 1px 5px;
   border-radius: 3px;
   flex-shrink: 0;
+  border: 1px solid transparent;
 }
-.dataset-badge.original  { background: rgba(156,220,254,0.15); color: #9cdcfe; }
-.dataset-badge.localization { background: rgba(78,201,176,0.15); color: #4ec9b0; }
+.dataset-badge.original  { background: var(--badge-original-bg); color: var(--badge-original-fg); border-color: var(--badge-original-border); }
+.dataset-badge.localization { background: var(--badge-localization-bg); color: var(--badge-localization-fg); border-color: var(--badge-localization-border); }
 .extract-badge {
   font-size: 10px;
   padding: 1px 5px;
   border-radius: 3px;
   flex-shrink: 0;
-  background: rgba(255, 198, 109, 0.16);
-  color: #ffc66d;
+  background: var(--badge-extract-bg);
+  color: var(--badge-extract-fg);
+  border: 1px solid var(--badge-extract-border);
 }
 
 /* ─── Status footer ─── */
