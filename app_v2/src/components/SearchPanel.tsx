@@ -1,11 +1,13 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SearchResult } from '@/lib/types';
 
 interface Props {
   onNavigate: (jarName: string, filePath: string, startLine?: number) => void;
 }
+
+const STEP = 22;
 
 export default function SearchPanel({ onNavigate }: Props) {
   const [query, setQuery] = useState('');
@@ -14,6 +16,27 @@ export default function SearchPanel({ onNavigate }: Props) {
   const [loading, setLoading] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const accumulated = useRef(0);
+
+  useEffect(() => {
+    const el = resultsRef.current;
+    if (!el) return;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      let px = e.deltaY;
+      if (e.deltaMode === 1) px *= STEP;
+      if (e.deltaMode === 2) px *= el!.clientHeight;
+      accumulated.current += px;
+      const steps = Math.trunc(accumulated.current / STEP);
+      if (steps !== 0) {
+        el!.scrollTop += steps * STEP;
+        accumulated.current -= steps * STEP;
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   async function doSearch(searchType = type) {
     const q = query.trim();
@@ -66,7 +89,7 @@ export default function SearchPanel({ onNavigate }: Props) {
         </div>
       </div>
 
-      <div className="search-results">
+      <div className="search-results" ref={resultsRef}>
         {loading && <div className="search-hint">搜索中...</div>}
 
         {!loading && results === null && (

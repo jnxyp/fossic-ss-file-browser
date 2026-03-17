@@ -130,6 +130,28 @@ export default function FileTree({ activeJar, activeFile, onSelect, autoNavigate
   const filesByJarRef = useRef(filesByJar);
   filesByJarRef.current = filesByJar;
   const pendingScrollRef = useRef<{ jarName: string; filePath: string } | null>(null);
+  const accumulated = useRef(0);
+
+  // Row height matches virtualizer estimateSize
+  const ROW_H = 22;
+  useEffect(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      let px = e.deltaY;
+      if (e.deltaMode === 1) px *= ROW_H;
+      if (e.deltaMode === 2) px *= el!.clientHeight;
+      accumulated.current += px;
+      const steps = Math.trunc(accumulated.current / ROW_H);
+      if (steps !== 0) {
+        el!.scrollTop += steps * ROW_H;
+        accumulated.current -= steps * ROW_H;
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [loading]);
 
   // Load jar list
   useEffect(() => {
@@ -223,7 +245,7 @@ export default function FileTree({ activeJar, activeFile, onSelect, autoNavigate
     );
     if (idx >= 0) {
       pendingScrollRef.current = null;
-      virtualizer.scrollToIndex(idx, { align: 'center', behavior: 'smooth' });
+      virtualizer.scrollToIndex(idx, { align: 'center', behavior: 'auto' });
     }
   });
 

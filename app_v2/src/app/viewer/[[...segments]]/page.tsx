@@ -107,20 +107,19 @@ export default function ViewerPage() {
       <header className="viewer-header">
         <div className="breadcrumb">
           {jarName && <span className="breadcrumb-jar" title={jarName}>{jarName}</span>}
-          {jarName && filePath && <span className="breadcrumb-sep">/</span>}
-          {filePath && <span className="breadcrumb-file" title={filePath}>{fileName}</span>}
-          {!jarName && <span style={{ color: 'var(--text-muted)' }}>欢迎</span>}
-        </div>
-        <div className="header-actions">
-          <button
-            type="button"
-            className={`icon-btn${copied ? ' active' : ''}`}
-            title={copied ? '已复制' : '复制类名定位符'}
-            disabled={!jarName || !filePath}
-            onClick={() => void handleCopy()}
-          >
-            {copied ? '✓' : '⧉'}
-          </button>
+          {jarName && filePath && <span className="breadcrumb-sep">:</span>}
+          {filePath && <span className="breadcrumb-file" title={filePath}>{filePath}</span>}
+          {filePath && (
+            <button
+              type="button"
+              className={`icon-btn${copied ? ' active' : ''}`}
+              title={copied ? '已复制' : '复制类名定位符'}
+              onClick={() => void handleCopy()}
+            >
+              {copied ? '✓' : '⧉'}
+            </button>
+          )}
+          {!jarName && <span className="breadcrumb-welcome">欢迎</span>}
         </div>
       </header>
 

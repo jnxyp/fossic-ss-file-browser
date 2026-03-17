@@ -308,6 +308,7 @@ a { color: inherit; text-decoration: none; }
   flex: 1;
   min-width: 0;
   overflow: auto;
+  scroll-behavior: auto;
   position: relative;
   background: var(--editor-bg);
 }

@@ -28,8 +28,8 @@ function useSyncScroll(active: boolean) {
 
   useEffect(() => {
     if (!active) return;
-    const left = leftRef.current;
-    const right = rightRef.current;
+    const left = leftRef.current?.querySelector<HTMLElement>('.code-pane') ?? null;
+    const right = rightRef.current?.querySelector<HTMLElement>('.code-pane') ?? null;
     if (!left || !right) return;
 
     function onLeft() {

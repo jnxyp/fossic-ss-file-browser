@@ -41,6 +41,9 @@ interface Props {
   onClickEntry?: (entry: StringEntry) => void;
 }
 
+// Line height matches CSS: font-size 13px × line-height 1.6
+const LINE_H = 13 * 1.6;
+
 export default function CodePanel({
   code,
   label,
@@ -52,7 +55,33 @@ export default function CodePanel({
 }: Props) {
   const [html, setHtml] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
+  const accumulated = useRef(0);
   const { resolvedTheme } = useTheme();
+
+  // ─── Line-by-line wheel scroll ─────────────────────────────────────────────
+
+  useEffect(() => {
+    const pane = paneRef.current;
+    if (!pane) return;
+
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      let px = e.deltaY;
+      if (e.deltaMode === 1) px *= LINE_H;        // deltaMode LINE → pixels
+      if (e.deltaMode === 2) px *= pane!.clientHeight; // deltaMode PAGE → pixels
+
+      accumulated.current += px;
+      const lines = Math.trunc(accumulated.current / LINE_H);
+      if (lines !== 0) {
+        pane!.scrollTop += lines * LINE_H;
+        accumulated.current -= lines * LINE_H;
+      }
+    }
+
+    pane.addEventListener('wheel', onWheel, { passive: false });
+    return () => pane.removeEventListener('wheel', onWheel);
+  }, []);
 
   // ─── Shiki render + string transformer ────────────────────────────────────
 
@@ -145,7 +174,7 @@ export default function CodePanel({
     if (!highlightLines.length || !containerRef.current || html === null) return;
     requestAnimationFrame(() => {
       containerRef.current?.querySelector('.hl-line')
-        ?.scrollIntoView({ block: 'center' });
+        ?.scrollIntoView({ block: 'center', behavior: 'instant' });
     });
   }, [html, highlightLines]);
 
@@ -164,7 +193,7 @@ export default function CodePanel({
 
   if (code === null) {
     return (
-      <div className="code-pane">
+      <div className="code-pane" ref={paneRef}>
         {label && <div className="code-pane-label">{label}</div>}
         <div className="code-pane-missing">文件不存在</div>
       </div>
@@ -172,7 +201,7 @@ export default function CodePanel({
   }
 
   return (
-    <div className="code-pane">
+    <div className="code-pane" ref={paneRef}>
       {label && <div className="code-pane-label">{label}</div>}
       {html === null && <div className="code-loading">加载中...</div>}
       <div
