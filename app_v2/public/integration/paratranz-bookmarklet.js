@@ -382,6 +382,22 @@
     };
   }
 
+  function normalizeLocatorForSearch(locator) {
+    return String(locator || '').replace(/\.class$/, '');
+  }
+
+  function currentPageMatchesLocator(locator) {
+    var currentLocator = normalizeLocatorForSearch(new URL(window.location.href).searchParams.get('key'));
+    return currentLocator === normalizeLocatorForSearch(locator);
+  }
+
+  function hasRowsForLocator(locator) {
+    var expected = String(locator || '') + '#';
+    return getStringRows().map(parseRow).some(function (entry) {
+      return entry.locatorAndValue.indexOf(expected) === 0;
+    });
+  }
+
   function isStringsPage() {
     return document.body && document.body.getAttribute('data-page') === 'strings';
   }
@@ -423,8 +439,7 @@
   }
 
   async function searchByLocator(locator) {
-    var currentLocator = new URL(window.location.href).searchParams.get('key');
-    if (currentLocator === locator) {
+    if (currentPageMatchesLocator(locator)) {
       return;
     }
 
@@ -466,13 +481,14 @@
     }
 
     await waitFor(function () {
-      var current = new URL(window.location.href).searchParams.get('key');
-      return current === locator;
+      return currentPageMatchesLocator(locator);
     }, NAVIGATION_TIMEOUT_MS);
 
     await waitFor(function () {
-      return getStringRows().length > 0;
+      return hasRowsForLocator(locator);
     }, NAVIGATION_TIMEOUT_MS);
+
+    await wait(100);
   }
 
   function findMatchingRow(payload) {
@@ -510,9 +526,21 @@
 
     var match = findMatchingRow(payload);
     if (!match || !match.row) {
+      if (currentPageMatchesLocator(payload.locator)) {
+        await waitFor(function () {
+          return getStringRows().length > 0;
+        }, NAVIGATION_TIMEOUT_MS);
+        match = findMatchingRow(payload);
+      }
+    }
+
+    if ((!match || !match.row) && !currentPageMatchesLocator(payload.locator)) {
       await ensurePageSize();
       await ensureAllStages();
       await searchByLocator(payload.locator);
+      await waitFor(function () {
+        return hasRowsForLocator(payload.locator);
+      }, NAVIGATION_TIMEOUT_MS);
       match = findMatchingRow(payload);
     }
 
