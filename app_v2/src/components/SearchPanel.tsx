@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Dataset, SearchResult } from '@/lib/types';
+import type { Dataset, SearchMatch, SearchResult } from '@/lib/types';
 
 interface Props {
   onNavigate: (jarName: string, filePath: string, startLine?: number, dataset?: Dataset) => void;
@@ -9,6 +9,28 @@ interface Props {
 
 const STEP = 22;
 const SEARCH_DELAY_MS = 300;
+
+function highlightMatch(text: string, query: string) {
+  const trimmed = query.trim();
+  if (!trimmed) return text;
+
+  const lowerText = text.toLowerCase();
+  const lowerQuery = trimmed.toLowerCase();
+  const index = lowerText.indexOf(lowerQuery);
+  if (index < 0) return text;
+
+  const before = text.slice(0, index);
+  const match = text.slice(index, index + trimmed.length);
+  const after = text.slice(index + trimmed.length);
+
+  return (
+    <>
+      {before}
+      <mark className="search-match-highlight">{match}</mark>
+      {after}
+    </>
+  );
+}
 
 export default function SearchPanel({ onNavigate }: Props) {
   const [query, setQuery] = useState('');
@@ -20,22 +42,22 @@ export default function SearchPanel({ onNavigate }: Props) {
   const requestIdRef = useRef(0);
 
   useEffect(() => {
-    const element = resultsRef.current;
-    if (!element) return;
+    const scrollElement = resultsRef.current;
+    if (!scrollElement) return;
     function onWheel(e: WheelEvent) {
       e.preventDefault();
       let px = e.deltaY;
       if (e.deltaMode === 1) px *= STEP;
-      if (e.deltaMode === 2) px *= element!.clientHeight;
+      if (e.deltaMode === 2) px *= scrollElement!.clientHeight;
       accumulated.current += px;
       const steps = Math.trunc(accumulated.current / STEP);
       if (steps !== 0) {
-        element!.scrollTop += steps * STEP;
+        scrollElement!.scrollTop += steps * STEP;
         accumulated.current -= steps * STEP;
       }
     }
-    element.addEventListener('wheel', onWheel, { passive: false });
-    return () => element.removeEventListener('wheel', onWheel);
+    scrollElement.addEventListener('wheel', onWheel, { passive: false });
+    return () => scrollElement.removeEventListener('wheel', onWheel);
   }, []);
 
   useEffect(() => {
@@ -114,38 +136,48 @@ export default function SearchPanel({ onNavigate }: Props) {
           const key = `${group.jarName}\0${group.sourcePath}`;
           const isCollapsed = collapsed.has(key);
           const fileName = group.sourcePath.split('/').pop() ?? group.sourcePath;
+          const stringMatches = group.matches.filter((m): m is SearchMatch & { type: 'string' } => m.type === 'string');
 
           return (
             <div key={key} className="search-group">
               <div
                 className="search-group-header"
-                onClick={() => toggleCollapse(key)}
+                onClick={() => onNavigate(group.jarName, group.sourcePath)}
               >
-                <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>
-                  {isCollapsed ? '▸' : '▾'}
-                </span>
-                <span
-                  className="search-group-name"
-                  onClick={e => { e.stopPropagation(); onNavigate(group.jarName, group.sourcePath); }}
-                  title={group.sourcePath}
-                >
-                  {fileName}
-                </span>
-                <span className="search-group-path" title={group.sourcePath}>
-                  {group.sourcePath}
-                </span>
-                <span className="search-group-count">{group.matches.length}</span>
+                {stringMatches.length > 0 ? (
+                  <button
+                    type="button"
+                    className="search-group-toggle"
+                    onClick={e => {
+                      e.stopPropagation();
+                      toggleCollapse(key);
+                    }}
+                    aria-label={isCollapsed ? '展开结果' : '折叠结果'}
+                  >
+                    {isCollapsed ? '▸' : '▾'}
+                  </button>
+                ) : (
+                  <span className="search-group-spacer" aria-hidden="true" />
+                )}
+                <div className="search-group-main" title={group.sourcePath}>
+                  <span className="search-group-name">
+                    {highlightMatch(fileName, query)}
+                  </span>
+                  <span className="search-group-path">
+                    {highlightMatch(group.sourcePath, query)}
+                  </span>
+                </div>
+                {stringMatches.length > 0 && (
+                  <span className="search-group-count">{stringMatches.length}</span>
+                )}
               </div>
 
-              {!isCollapsed && group.matches.map((m, i) => (
+              {!isCollapsed && stringMatches.map((m, i) => (
                 <div
-                  key={`${m.type}-${m.dataset ?? 'none'}-${m.startLine ?? 0}-${m.utf8Index ?? i}-${i}`}
+                  key={`${m.dataset ?? 'none'}-${m.startLine ?? 0}-${m.utf8Index ?? i}-${i}`}
                   className="search-match-item"
                   onClick={() => onNavigate(group.jarName, group.sourcePath, m.startLine, m.dataset)}
                 >
-                  <span className={`search-kind-badge ${m.type}`}>
-                    {m.type === 'class' ? '类名' : '字符串'}
-                  </span>
                   {m.dataset && (
                     <span className={`dataset-badge ${m.dataset}`}>
                       {m.dataset === 'original' ? '原文' : '译文'}
