@@ -86,6 +86,8 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
 
   // ParaTranz message handler
   useEffect(() => {
+    window.name = '__ssfb_viewer';
+
     async function sendReady() {
       if (!window.opener) return;
       let revision = '';
@@ -105,6 +107,12 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
       if (!ALLOWED_ORIGINS.includes(ev.origin)) return;
       const msg = ev.data as AppMessage;
       if (msg?.protocol !== PROTOCOL_NAME) return;
+
+      if (msg.type === MessageType.PT_PING) {
+        void sendReady();
+        return;
+      }
+
       if (msg.type !== MessageType.PT_NAVIGATE_TO_STRING) return;
 
       const payload = msg.payload as NavigateToStringPayload;
