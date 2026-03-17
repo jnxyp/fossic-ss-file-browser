@@ -65,6 +65,7 @@
   var monitorTimer = null;
   var contextObserver = null;
   var hasCompletedHandshake = false;
+  var isTriggerNavigating = false;
   var PAGE_SIZE = '800';
   var NAVIGATION_TIMEOUT_MS = 12000;
 
@@ -692,6 +693,93 @@
       className: entry.className,
       utf8ConstId: entry.utf8ConstId,
     });
+  }
+
+  function getContextToggle() {
+    return Array.prototype.find.call(
+      document.querySelectorAll('.string-editor a, .string-editor button'),
+      function (el) {
+        return /上下文/.test(el.textContent || '');
+      }
+    ) || null;
+  }
+
+  function parseCurrentEntry() {
+    var contextEl = document.querySelector('.context');
+    if (!contextEl) {
+      return null;
+    }
+
+    var text = contextEl.textContent || '';
+    var jarMatch = text.match(/文件[:：]\s*([^\s]+\.jar)/);
+    var classMatch = text.match(/类[:：]\s*([^\s]+\.class)/);
+    var constMatch = text.match(/常量号[:：]\s*(\d+)/);
+
+    if (!jarMatch || !classMatch || !constMatch) {
+      return null;
+    }
+
+    return {
+      jarName: jarMatch[1],
+      className: classMatch[1],
+      utf8ConstId: '#' + String(Number(constMatch[1])),
+    };
+  }
+
+  async function ensureCurrentEntry() {
+    var entry = parseCurrentEntry();
+    if (entry) {
+      debugLog('ensureCurrentEntry:ready', entry);
+      return entry;
+    }
+
+    var toggle = getContextToggle();
+    if (!toggle) {
+      debugLog('ensureCurrentEntry:no-toggle');
+      return null;
+    }
+
+    debugLog('ensureCurrentEntry:expand-context');
+    toggle.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    try {
+      await waitFor(function () {
+        return parseCurrentEntry();
+      }, 3000, 100);
+    } catch {
+      debugLog('ensureCurrentEntry:expand-timeout');
+      return null;
+    }
+
+    entry = parseCurrentEntry();
+    debugLog('ensureCurrentEntry:after-expand', entry);
+    return entry;
+  }
+
+  async function triggerNavigate() {
+    if (!autoFollow || isTriggerNavigating) {
+      return;
+    }
+
+    isTriggerNavigating = true;
+    var entry = await ensureCurrentEntry();
+    if (!entry) {
+      isTriggerNavigating = false;
+      return;
+    }
+
+    debugLog('triggerNavigate:send', entry);
+    try {
+      sendNavigate({
+        jarName: entry.jarName,
+        className: entry.className,
+        utf8ConstId: entry.utf8ConstId,
+      });
+    } finally {
+      window.setTimeout(function () {
+        isTriggerNavigating = false;
+      }, 150);
+    }
   }
 
   function handleDocumentClick(event) {
