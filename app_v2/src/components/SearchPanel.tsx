@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { SearchResult } from '@/lib/types';
+import type { Dataset } from '@/lib/types';
 
 interface Props {
-  onNavigate: (jarName: string, filePath: string, startLine?: number) => void;
+  onNavigate: (jarName: string, filePath: string, startLine?: number, dataset?: Dataset) => void;
 }
 
 const STEP = 22;
@@ -131,7 +132,7 @@ export default function SearchPanel({ onNavigate }: Props) {
                 <div
                   key={i}
                   className="search-match-item"
-                  onClick={() => onNavigate(group.jarName, group.sourcePath, m.startLine)}
+                  onClick={() => onNavigate(group.jarName, group.sourcePath, m.startLine, m.dataset)}
                 >
                   {m.dataset && (
                     <span className={`dataset-badge ${m.dataset}`}>

@@ -5,6 +5,7 @@ node_modules/
 dist/
 .env*.local
 *.log
+*.tsbuildinfo
 
 # 反编译产物与运行时状态（由 updater 生成，不入库）
 artifacts/*

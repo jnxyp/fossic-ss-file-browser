@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTheme } from 'next-themes';
 import type { Highlighter } from 'shiki';
 import type { StringEntry } from '@/lib/types';
@@ -57,6 +57,7 @@ export default function CodePanel({
   const containerRef = useRef<HTMLDivElement>(null);
   const paneRef = useRef<HTMLDivElement>(null);
   const accumulated = useRef(0);
+  const panelId = useId();
   const { resolvedTheme } = useTheme();
 
   // ─── Line-by-line wheel scroll ─────────────────────────────────────────────
@@ -139,9 +140,7 @@ export default function CodePanel({
           },
           {
             line(node: { properties: Record<string, unknown> }, lineNum: number) {
-              if (!highlightLines.includes(lineNum)) return;
-              const cls = (node.properties.class as string | undefined) ?? '';
-              node.properties.class = cls ? `${cls} hl-line` : 'hl-line';
+              node.properties['data-line'] = String(lineNum);
             },
           },
 
@@ -152,7 +151,7 @@ export default function CodePanel({
     });
 
     return () => { cancelled = true; };
-  }, [code, resolvedTheme, highlightLines, stringEntries]);
+  }, [code, resolvedTheme, stringEntries]);
 
   // ─── Active string highlight (no Shiki re-run needed) ─────────────────────
 
@@ -174,9 +173,9 @@ export default function CodePanel({
   useEffect(() => {
     if (!highlightLines.length || !containerRef.current || html === null) return;
     requestAnimationFrame(() => {
-      const codeChildren = containerRef.current?.querySelector('code')?.children;
-      if (!codeChildren) return;
-      codeChildren[highlightLines[0] - 1]?.scrollIntoView({ block: 'center', behavior: 'instant' });
+      containerRef.current
+        ?.querySelector<HTMLElement>(`[data-line="${highlightLines[0]}"]`)
+        ?.scrollIntoView({ block: 'center', behavior: 'instant' });
     });
   }, [html, highlightLines]);
 
@@ -206,7 +205,20 @@ export default function CodePanel({
     <div className="code-pane" ref={paneRef}>
       {label && <div className="code-pane-label">{label}</div>}
       {html === null && <div className="code-loading">加载中...</div>}
+      {highlightLines.length > 0 && (
+        <style>{highlightLines.map(lineNum => `
+[data-code-panel="${panelId}"] [data-line="${lineNum}"] {
+  background: var(--hl-active-bg);
+  border-left: 2px solid var(--hl-active-border);
+}
+[data-code-panel="${panelId}"] [data-line="${lineNum}"]::before {
+  opacity: 0.7;
+  padding-left: 2px;
+}
+`).join('\n')}</style>
+      )}
       <div
+        data-code-panel={panelId}
         ref={containerRef}
         className="code-viewer"
         dangerouslySetInnerHTML={{ __html: html ?? '' }}

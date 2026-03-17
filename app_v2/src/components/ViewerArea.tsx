@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import CodePanel from './CodePanel';
 import type { StringEntry, ViewMode, Dataset } from '@/lib/types';
 
@@ -67,6 +68,7 @@ interface Props {
   targetClass: string;
   activeUtf8Index?: number;
   activeConstTable?: string;
+  preferredDataset?: Dataset;
   highlightLines?: number[];
   onClickEntry?: (entry: StringEntry, dataset: Dataset) => void;
 }
@@ -89,9 +91,13 @@ export default function ViewerArea({
   targetClass,
   activeUtf8Index,
   activeConstTable,
+  preferredDataset,
   highlightLines = [],
   onClickEntry,
 }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<ViewMode>(readMode);
   const [split, setSplit] = useState(readSplit);
   // contentFor tracks which file the loaded content belongs to.
@@ -112,7 +118,24 @@ export default function ViewerArea({
   function changeMode(m: ViewMode) {
     setMode(m);
     saveMode(m);
+    const nextQuery = new URLSearchParams(searchParams.toString());
+    if (m === 'parallel') {
+      nextQuery.delete('preferredDataset');
+    } else {
+      nextQuery.set('preferredDataset', m);
+    }
+    const qs = nextQuery.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
   }
+
+  useEffect(() => {
+    if (!preferredDataset) return;
+    setMode(prev => {
+      if (prev === 'parallel' || prev === preferredDataset) return prev;
+      saveMode(preferredDataset);
+      return preferredDataset;
+    });
+  }, [preferredDataset]);
 
   // Always fetch both datasets — CSS controls which panel is visible
   const fetchSide = useCallback(async (dataset: Dataset): Promise<string | null> => {

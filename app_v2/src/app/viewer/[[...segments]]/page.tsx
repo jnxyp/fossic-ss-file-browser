@@ -24,6 +24,10 @@ export default function ViewerPage() {
   const utf8ConstId = searchParams.get('utf8ConstId') ?? undefined;
   const subclass = searchParams.get('subclass') ?? undefined;
   const highlightLineParam = searchParams.get('highlightLine');
+  const preferredDatasetParam = searchParams.get('preferredDataset');
+  const preferredDataset = preferredDatasetParam === 'original' || preferredDatasetParam === 'localization'
+    ? preferredDatasetParam
+    : undefined;
 
   // Target class includes inner class suffix when present
   const targetClass = subclass && filePath
@@ -130,6 +134,7 @@ export default function ViewerPage() {
         targetClass={targetClass}
         activeUtf8Index={activeUtf8Index}
         activeConstTable={activeConstTable}
+        preferredDataset={preferredDataset}
         highlightLines={highlightLines}
         onClickEntry={handleClickEntry}
       />

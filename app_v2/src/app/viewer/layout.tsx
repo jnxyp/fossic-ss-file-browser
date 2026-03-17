@@ -9,6 +9,7 @@ import {
   ALLOWED_ORIGINS, MessageType, PROTOCOL_NAME,
   type AppMessage, type NavigateToStringPayload,
 } from '@/lib/protocol';
+import type { Dataset } from '@/lib/types';
 
 const SIDEBAR_KEY = 'ssfb:sidebar-width';
 const MIN_SIDEBAR = 180;
@@ -135,9 +136,13 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
     router.push(`/viewer/${encodeURIComponent(jarName)}/${filePath}`);
   }, [router]);
 
-  const handleSearchNavigate = useCallback((jarName: string, filePath: string, startLine?: number) => {
-    const url = startLine
-      ? `/viewer/${encodeURIComponent(jarName)}/${filePath}?highlightLine=${startLine}`
+  const handleSearchNavigate = useCallback((jarName: string, filePath: string, startLine?: number, dataset?: Dataset) => {
+    const query = new URLSearchParams();
+    if (startLine) query.set('highlightLine', String(startLine));
+    if (dataset) query.set('preferredDataset', dataset);
+    const qs = query.toString();
+    const url = qs
+      ? `/viewer/${encodeURIComponent(jarName)}/${filePath}?${qs}`
       : `/viewer/${encodeURIComponent(jarName)}/${filePath}`;
     router.push(url);
     setAutoNavigate({ jarName, filePath });
