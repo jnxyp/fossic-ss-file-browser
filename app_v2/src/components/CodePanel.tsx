@@ -76,7 +76,9 @@ function computeOverlayRects(
     const lineEl = lineEls[entry.startLine - 1];
     if (!lineEl) continue;
 
-    const rect = getCharRect(lineEl, entry.startCol, entry.endCol);
+    // startCol points to the first content char (after opening quote);
+    // subtract 1 to include the opening quote in the highlight rect
+    const rect = getCharRect(lineEl, entry.startCol - 1, entry.endCol);
     if (!rect || rect.width === 0) continue;
 
     result.push({

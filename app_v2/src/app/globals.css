@@ -173,6 +173,18 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
 }
 
+.sidebar-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar-panel-hidden {
+  display: none;
+}
+
 /* ─── Sidebar resizer ─── */
 .sidebar-resizer {
   width: 5px;
@@ -364,13 +376,16 @@ a { color: inherit; text-decoration: none; }
 
 .code-viewer code {
   display: block;
+  min-width: max-content;
   counter-reset: line;
+  line-height: 0; /* collapse \n text nodes between .line spans */
 }
 
 .code-viewer .line {
   display: block;
   padding: 0 16px 0 0;
   position: relative;
+  line-height: 1.6;
 }
 
 /* Line number via CSS counter */

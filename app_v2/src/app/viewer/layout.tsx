@@ -24,12 +24,6 @@ interface AutoNavigate {
   filePath: string;
 }
 
-interface Props {
-  children: React.ReactNode;
-  activeJar?: string;
-  activeFile?: string;
-}
-
 export default function ViewerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -146,7 +140,6 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
       ? `/viewer/${encodeURIComponent(jarName)}/${filePath}?highlightLine=${startLine}`
       : `/viewer/${encodeURIComponent(jarName)}/${filePath}`;
     router.push(url);
-    setTab('explorer');
     setAutoNavigate({ jarName, filePath });
   }, [router]);
 
@@ -178,7 +171,7 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
           </div>
 
           <div className="sidebar-content">
-            {tab === 'explorer' ? (
+            <div className={`sidebar-panel${tab !== 'explorer' ? ' sidebar-panel-hidden' : ''}`}>
               <FileTree
                 activeJar={activeJar}
                 activeFile={activeFile}
@@ -186,9 +179,10 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
                 autoNavigateTo={autoNavigate}
                 onAutoNavigateDone={() => setAutoNavigate(null)}
               />
-            ) : (
+            </div>
+            <div className={`sidebar-panel${tab !== 'search' ? ' sidebar-panel-hidden' : ''}`}>
               <SearchPanel onNavigate={handleSearchNavigate} />
-            )}
+            </div>
           </div>
         </aside>
 
