@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from 'next-themes';
 import type { Highlighter } from 'shiki';
 import type { StringEntry } from '@/lib/types';
@@ -29,77 +29,12 @@ function decodeJavaUnicode(s: string) {
   );
 }
 
-// ─── Range-based overlay rect ─────────────────────────────────────────────────
-
-interface OverlayRect {
-  entry: StringEntry;
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-}
-
-function getCharRect(lineEl: Element, startCol: number, endCol: number): DOMRect | null {
-  let charPos = 0;
-  const range = document.createRange();
-  let startSet = false;
-
-  const walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT);
-  let node = walker.nextNode() as Text | null;
-
-  while (node) {
-    const len = node.length;
-    if (!startSet && charPos + len >= startCol) {
-      range.setStart(node, startCol - charPos);
-      startSet = true;
-    }
-    if (startSet && charPos + len >= endCol) {
-      range.setEnd(node, endCol - charPos);
-      return range.getBoundingClientRect();
-    }
-    charPos += len;
-    node = walker.nextNode() as Text | null;
-  }
-  return null;
-}
-
-function computeOverlayRects(
-  container: HTMLElement,
-  entries: StringEntry[],
-): OverlayRect[] {
-  const lineEls = container.querySelectorAll('code .line');
-  const containerRect = container.getBoundingClientRect();
-  const result: OverlayRect[] = [];
-
-  for (const entry of entries) {
-    // We only handle single-line entries for the first pass
-    const lineEl = lineEls[entry.startLine - 1];
-    if (!lineEl) continue;
-
-    // startCol points to the first content char (after opening quote);
-    // subtract 1 to include the opening quote in the highlight rect
-    const rect = getCharRect(lineEl, entry.startCol - 1, entry.endCol);
-    if (!rect || rect.width === 0) continue;
-
-    result.push({
-      entry,
-      top: rect.top - containerRect.top + container.scrollTop,
-      left: rect.left - containerRect.left + container.scrollLeft,
-      width: rect.width,
-      height: rect.height,
-    });
-  }
-
-  return result;
-}
-
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
   code: string | null;
   label?: string;
   stringEntries?: StringEntry[];
-  /** utf8Index + constTable of the "current" (highlighted) entry */
   activeUtf8Index?: number;
   activeConstTable?: string;
   highlightLines?: number[];
@@ -116,74 +51,116 @@ export default function CodePanel({
   onClickEntry,
 }: Props) {
   const [html, setHtml] = useState('');
-  const [overlayRects, setOverlayRects] = useState<OverlayRect[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const { resolvedTheme } = useTheme();
 
-  // Shiki render
+  // ─── Shiki render + string transformer ────────────────────────────────────
+
   useEffect(() => {
     if (code === null) { setHtml(''); return; }
     let cancelled = false;
 
     getHighlighter().then(h => {
       if (cancelled) return;
+
       const theme = resolvedTheme === 'light' ? 'github-light' : 'one-dark-pro';
       const decoded = decodeJavaUnicode(code);
+
+      // Group entries by line for O(1) lookup inside the transformer
+      const entriesByLine = new Map<number, StringEntry[]>();
+      for (const entry of stringEntries ?? []) {
+        const list = entriesByLine.get(entry.startLine);
+        if (list) list.push(entry);
+        else entriesByLine.set(entry.startLine, [entry]);
+      }
 
       const result = h.codeToHtml(decoded, {
         lang: 'java',
         theme,
-        transformers: highlightLines.length > 0 ? [{
-          name: 'hl-lines',
-          line(node, line) {
-            if (highlightLines.includes(line)) {
-              const cls = node.properties.class as string | string[];
-              node.properties.class = Array.isArray(cls)
-                ? [...cls, 'hl-line']
-                : [cls, 'hl-line'].filter(Boolean).join(' ');
-            }
+        transformers: [
+          // ── String chip transformer ──────────────────────────────────────
+          {
+            span(node, line, col) {
+              const lineEntries = entriesByLine.get(line);
+              if (!lineEntries) return;
+
+              // Resolve text content length of this token
+              const text = (node.children as Array<{ type: string; value?: string }>)
+                .filter(c => c.type === 'text')
+                .map(c => c.value ?? '')
+                .join('');
+              if (!text) return;
+
+              // Match tokens whose start col falls within [startCol-1, endCol).
+              // startCol = first content char (opening quote is at startCol-1).
+              // endCol   = exclusive end (one past closing quote).
+              // Checking col >= startCol-1 ensures the opening quote token is included,
+              // while col < endCol excludes tokens that start after the string ends.
+              for (const entry of lineEntries) {
+                if (col >= entry.startCol - 1 && col < entry.endCol) {
+                  const cls = (node.properties.class as string | undefined) ?? '';
+                  node.properties.class = cls ? `${cls} str-chip` : 'str-chip';
+                  node.properties['data-str-id'] = String(entry.id);
+                  node.properties['data-utf8-index'] = String(entry.utf8Index);
+                  node.properties['data-const-table'] = entry.constTable ?? '';
+                  break;
+                }
+              }
+            },
           },
-        }] : [],
+
+          // ── Highlight lines transformer ──────────────────────────────────
+          ...(highlightLines.length > 0 ? [{
+            line(node: { properties: Record<string, unknown> }, lineNum: number) {
+              if (highlightLines.includes(lineNum)) {
+                const cls = (node.properties.class as string | undefined) ?? '';
+                node.properties.class = cls ? `${cls} hl-line` : 'hl-line';
+              }
+            },
+          }] : []),
+        ],
       });
+
       if (!cancelled) setHtml(result);
     });
 
     return () => { cancelled = true; };
-  }, [code, resolvedTheme, highlightLines]);
+  }, [code, resolvedTheme, highlightLines, stringEntries]);
 
-  // Compute overlay positions after render
+  // ─── Active string highlight (no Shiki re-run needed) ─────────────────────
+
   useEffect(() => {
-    if (!stringEntries?.length || !containerRef.current || !html) {
-      setOverlayRects([]);
-      return;
-    }
-    // rAF to ensure DOM is painted
-    const id = requestAnimationFrame(() => {
-      if (!containerRef.current) return;
-      setOverlayRects(computeOverlayRects(containerRef.current, stringEntries));
-    });
-    return () => cancelAnimationFrame(id);
-  }, [html, stringEntries]);
+    const container = containerRef.current;
+    if (!container) return;
+    container.querySelectorAll('.str-chip--active')
+      .forEach(el => el.classList.remove('str-chip--active'));
+    if (activeUtf8Index == null) return;
+    const sel = `[data-utf8-index="${activeUtf8Index}"][data-const-table="${activeConstTable ?? ''}"]`;
+    container.querySelectorAll(sel).forEach(el => el.classList.add('str-chip--active'));
+  }, [html, activeUtf8Index, activeConstTable]);
 
-  // Recompute on resize
-  useEffect(() => {
-    if (!stringEntries?.length || !containerRef.current) return;
-    const obs = new ResizeObserver(() => {
-      if (!containerRef.current) return;
-      setOverlayRects(computeOverlayRects(containerRef.current, stringEntries));
-    });
-    obs.observe(containerRef.current);
-    return () => obs.disconnect();
-  }, [stringEntries]);
+  // ─── Scroll to highlight line ──────────────────────────────────────────────
 
-  // Scroll to highlight line
   useEffect(() => {
     if (!highlightLines.length || !containerRef.current || !html) return;
     requestAnimationFrame(() => {
-      const el = containerRef.current?.querySelector('.hl-line');
-      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      containerRef.current?.querySelector('.hl-line')
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     });
   }, [html, highlightLines]);
+
+  // ─── Click handler (event delegation) ─────────────────────────────────────
+
+  const handleCodeClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onClickEntry) return;
+    const target = (e.target as Element).closest('[data-str-id]') as HTMLElement | null;
+    if (!target) return;
+    const entryId = parseInt(target.dataset.strId!, 10);
+    const entry = stringEntries?.find(se => se.id === entryId);
+    if (entry) onClickEntry(entry);
+  }, [onClickEntry, stringEntries]);
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   if (code === null) {
     return (
@@ -203,26 +180,8 @@ export default function CodePanel({
         dangerouslySetInnerHTML={{
           __html: html || `<pre><code>${decodeJavaUnicode(code)}</code></pre>`,
         }}
+        onClick={handleCodeClick}
       />
-      {/* String overlay */}
-      {overlayRects.length > 0 && (
-        <div className="string-overlay" aria-hidden="true">
-          {overlayRects.map(r => {
-            const isCurrent =
-              r.entry.utf8Index === activeUtf8Index &&
-              r.entry.constTable === (activeConstTable ?? '');
-            return (
-              <div
-                key={r.entry.id}
-                className={`string-chip${isCurrent ? ' current' : ''}`}
-                style={{ top: r.top, left: r.left, width: r.width, height: r.height }}
-                title={r.entry.value}
-                onClick={() => onClickEntry?.(r.entry)}
-              />
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
