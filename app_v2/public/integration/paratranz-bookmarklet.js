@@ -63,7 +63,6 @@
   var autoFollow = loadAutoFollow();
   var connectionStatus = 'disconnected';
   var monitorTimer = null;
-  var contextObserver = null;
   var hasCompletedHandshake = false;
   var isTriggerNavigating = false;
   var PAGE_SIZE = '800';
@@ -89,6 +88,16 @@
     } catch {
       return true;
     }
+  }
+
+  function setAutoFollow(nextValue) {
+    autoFollow = Boolean(nextValue);
+    try {
+      window.localStorage.setItem(AUTO_FOLLOW_STORAGE_KEY, autoFollow ? 'true' : 'false');
+    } catch {
+      // Ignore storage failures.
+    }
+    renderStatusBar();
   }
 
   function getStatusMeta() {
@@ -131,7 +140,11 @@
     }
 
     var statusMeta = getStatusMeta();
-    var reopenLabel = isBrowserOpen() ? '重开窗口' : '打开窗口';
+    var reopenLabel = '打开窗口';
+    var followLabel = autoFollow ? '跟随开' : '跟随关';
+    var followStyle = autoFollow
+      ? 'background:#1f3a2a;border:1px solid #2f6f49;color:#7ee787;'
+      : 'background:#2d1f21;border:1px solid #5a2d31;color:#f2cc60;';
 
     statusEl.innerHTML = [
       '<span style="display:flex;align-items:center;gap:6px;padding:0 2px">',
@@ -139,11 +152,15 @@
       '  <strong style="font-size:12px;font-weight:600">' + statusMeta.label + '</strong>',
       '</span>',
       '<button id="__ssfb_open" type="button" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;border-radius:999px;padding:5px 10px;cursor:pointer;font-size:12px;line-height:1.2">' + reopenLabel + '</button>',
+      '<button id="__ssfb_follow" type="button" style="' + followStyle + 'border-radius:999px;padding:5px 10px;cursor:pointer;font-size:12px;line-height:1.2">' + followLabel + '</button>',
       '<button id="__ssfb_close_bar" type="button" style="background:#2d1f21;border:1px solid #5a2d31;color:#f08888;border-radius:999px;padding:5px 10px;cursor:pointer;font-size:12px;line-height:1.2">关闭</button>',
     ].join('');
 
     document.getElementById('__ssfb_open').onclick = function () {
       openBrowser();
+    };
+    document.getElementById('__ssfb_follow').onclick = function () {
+      setAutoFollow(!autoFollow);
     };
     document.getElementById('__ssfb_close_bar').onclick = function () {
       closeIntegration();
@@ -783,12 +800,15 @@
   }
 
   function handleDocumentClick(event) {
+      if (!event.isTrusted) {
+        return;
+      }
       var target = event.target;
       if (!target || typeof target.closest !== 'function') {
         return;
       }
 
-      var row = target.closest('.string-list .row.string, .context .well');
+      var row = target.closest('.string-list .row.string');
       if (row) {
         window.setTimeout(triggerNavigate, 100);
       }
@@ -796,14 +816,6 @@
 
   function attachListeners() {
     document.addEventListener('click', handleDocumentClick);
-
-    var contextEl = document.querySelector('.context');
-    if (contextEl) {
-      contextObserver = new MutationObserver(function () {
-        window.setTimeout(triggerNavigate, 150);
-      });
-      contextObserver.observe(contextEl, { childList: true, subtree: true, characterData: true });
-    }
   }
 
   function startWindowMonitor() {
@@ -866,11 +878,6 @@
     if (monitorTimer) {
       window.clearInterval(monitorTimer);
       monitorTimer = null;
-    }
-
-    if (contextObserver) {
-      contextObserver.disconnect();
-      contextObserver = null;
     }
 
     document.removeEventListener('click', handleDocumentClick);
