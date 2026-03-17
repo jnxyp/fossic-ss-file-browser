@@ -15,13 +15,13 @@ export default function SearchPanel({ onNavigate }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
-  async function doSearch() {
+  async function doSearch(searchType = type) {
     const q = query.trim();
     if (!q) return;
     setLoading(true);
     setCollapsed(new Set());
     try {
-      const r = await fetch(`/api/search?q=${encodeURIComponent(q)}&type=${type}`);
+      const r = await fetch(`/api/search?q=${encodeURIComponent(q)}&type=${searchType}`);
       const d: { results: SearchResult[] } = await r.json();
       setResults(d.results ?? []);
     } finally {
@@ -52,14 +52,14 @@ export default function SearchPanel({ onNavigate }: Props) {
           <button
             type="button"
             className={`search-type-btn${type === 'class' ? ' active' : ''}`}
-            onClick={() => setType('class')}
+            onClick={() => { setType('class'); void doSearch('class'); }}
           >
             类名
           </button>
           <button
             type="button"
             className={`search-type-btn${type === 'string' ? ' active' : ''}`}
-            onClick={() => setType('string')}
+            onClick={() => { setType('string'); void doSearch('string'); }}
           >
             字符串
           </button>

@@ -3,7 +3,6 @@
   /* Layout */
   --sidebar-bg:       #252526;
   --sidebar-border:   #3c3c3c;
-  --actbar-bg:        #333333;
   --editor-bg:        #1e1e1e;
   --titlebar-bg:      #3c3c3c;
   --statusbar-bg:     #007acc;
@@ -53,7 +52,6 @@
 [data-theme='light'] {
   --sidebar-bg:       #f3f3f3;
   --sidebar-border:   #e7e7e7;
-  --actbar-bg:        #2c2c2c;
   --editor-bg:        #ffffff;
   --titlebar-bg:      #dddddd;
   --statusbar-bg:     #007acc;
@@ -139,7 +137,7 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  background: var(--actbar-bg);
+  background: var(--sidebar-bg);
 }
 
 .sidebar-tab {
@@ -155,6 +153,9 @@ a { color: inherit; text-decoration: none; }
   text-transform: uppercase;
   color: var(--text-muted);
   cursor: pointer;
+  background: none;
+  outline: none;
+  border: none;
   border-bottom: 2px solid transparent;
   user-select: none;
   transition: color 120ms, border-color 120ms;
@@ -344,6 +345,52 @@ a { color: inherit; text-decoration: none; }
   z-index: 5;
   color: var(--text-muted);
 }
+
+/* ─── Panel label bar (outside panel wrappers, always visible) ─── */
+.panel-labels {
+  display: flex;
+  flex-shrink: 0;
+  background: var(--titlebar-bg);
+  border-bottom: 1px solid var(--border);
+}
+.panel-label {
+  padding: 3px 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  user-select: none;
+}
+/* Gap matches split-resizer width */
+.panel-labels-gap { width: 5px; flex-shrink: 0; }
+
+/* Non-parallel: show only the active label */
+.panel-labels.mode-original  .panel-label-loc  { display: none; }
+.panel-labels.mode-original  .panel-labels-gap  { display: none; }
+.panel-labels.mode-localization .panel-label-orig { display: none; }
+.panel-labels.mode-localization .panel-labels-gap  { display: none; }
+/* Non-parallel: active label fills full width */
+.panel-labels:not(.mode-parallel) .panel-label { flex: 1; }
+
+/* Parallel: align labels with split panels */
+.panel-labels.mode-parallel .panel-label-orig { flex: 0 0 var(--split); }
+.panel-labels.mode-parallel .panel-label-loc  { flex: 1; }
+
+/* ─── Panel wrappers (always rendered, mode controls visibility) ─── */
+.panel-orig,
+.panel-loc {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.code-area.mode-original  .panel-loc  { display: none; }
+.code-area.mode-localization .panel-orig { display: none; }
+.code-area.mode-parallel .panel-orig {
+  flex: 0 0 var(--split);
+}
+.code-area:not(.mode-parallel) > .split-resizer { display: none; }
 
 /* ─── Split resizer ─── */
 .split-resizer {

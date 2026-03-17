@@ -2,16 +2,14 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import ViewerArea from '@/components/ViewerArea';
+import dynamic from 'next/dynamic';
+const ViewerArea = dynamic(() => import('@/components/ViewerArea'), { ssr: false });
 import {
   ALLOWED_ORIGINS, MessageType, PROTOCOL_NAME,
   type NavigateToParatranzPayload,
 } from '@/lib/protocol';
 import type { StringEntry, Dataset } from '@/lib/types';
 
-function parseConstTable(className: string): string {
-  return className.match(/(\$[^/]+)(?=\.(class|java)$)/)?.[1] ?? '';
-}
 
 export default function ViewerPage() {
   const params = useParams();

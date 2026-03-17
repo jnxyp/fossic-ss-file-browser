@@ -50,14 +50,15 @@ export default function CodePanel({
   highlightLines = [],
   onClickEntry,
 }: Props) {
-  const [html, setHtml] = useState('');
+  const [html, setHtml] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { resolvedTheme } = useTheme();
 
   // ─── Shiki render + string transformer ────────────────────────────────────
 
   useEffect(() => {
-    if (code === null) { setHtml(''); return; }
+    if (code === null) { setHtml(null); return; }
+    setHtml(null); // show loading while syntax highlighting renders
     let cancelled = false;
 
     getHighlighter().then(h => {
@@ -141,10 +142,10 @@ export default function CodePanel({
   // ─── Scroll to highlight line ──────────────────────────────────────────────
 
   useEffect(() => {
-    if (!highlightLines.length || !containerRef.current || !html) return;
+    if (!highlightLines.length || !containerRef.current || html === null) return;
     requestAnimationFrame(() => {
       containerRef.current?.querySelector('.hl-line')
-        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        ?.scrollIntoView({ block: 'center' });
     });
   }, [html, highlightLines]);
 
@@ -173,12 +174,11 @@ export default function CodePanel({
   return (
     <div className="code-pane">
       {label && <div className="code-pane-label">{label}</div>}
+      {html === null && <div className="code-loading">加载中...</div>}
       <div
         ref={containerRef}
         className="code-viewer"
-        dangerouslySetInnerHTML={{
-          __html: html || `<pre><code>${decodeJavaUnicode(code)}</code></pre>`,
-        }}
+        dangerouslySetInnerHTML={{ __html: html ?? '' }}
         onClick={handleCodeClick}
       />
     </div>

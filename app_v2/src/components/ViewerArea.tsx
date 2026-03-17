@@ -87,8 +87,12 @@ export default function ViewerArea({
   highlightLines = [],
   onClickEntry,
 }: Props) {
-  const [mode, setMode] = useState<ViewMode>('localization'); // SSR-safe default
-  const [split, setSplit] = useState(DEFAULT_SPLIT);
+  const [mode, setMode] = useState<ViewMode>(readMode);
+  const [split, setSplit] = useState(readSplit);
+  // contentFor tracks which file the loaded content belongs to.
+  // When filePath changes, loading is derived as true immediately (first render),
+  // so the overlay appears before any effect fires.
+  const [contentFor, setContentFor] = useState({ jarName: '', filePath: '' });
   const [content, setContent] = useState<ContentState>({
     original: null, localization: null, loadingOrig: false, loadingLoc: false,
   });
@@ -99,18 +103,12 @@ export default function ViewerArea({
   const splitContainerRef = useRef<HTMLDivElement>(null);
   const { leftRef, rightRef } = useSyncScroll(mode === 'parallel');
 
-  // Init from localStorage (client only)
-  useEffect(() => {
-    setMode(readMode());
-    setSplit(readSplit());
-  }, []);
-
   function changeMode(m: ViewMode) {
     setMode(m);
     saveMode(m);
   }
 
-  // Load content when file/mode changes
+  // Always fetch both datasets — CSS controls which panel is visible
   const fetchSide = useCallback(async (dataset: Dataset): Promise<string | null> => {
     if (!jarName || !filePath) return null;
     const r = await fetch(
@@ -123,21 +121,15 @@ export default function ViewerArea({
 
   useEffect(() => {
     if (!jarName || !filePath) return;
-    setContent({ original: null, localization: null, loadingOrig: false, loadingLoc: false });
-
-    if (mode === 'original' || mode === 'parallel') {
-      setContent(p => ({ ...p, loadingOrig: true }));
-      fetchSide('original').then(c =>
-        setContent(p => ({ ...p, original: c, loadingOrig: false }))
-      );
-    }
-    if (mode === 'localization' || mode === 'parallel') {
-      setContent(p => ({ ...p, loadingLoc: true }));
-      fetchSide('localization').then(c =>
-        setContent(p => ({ ...p, localization: c, loadingLoc: false }))
-      );
-    }
-  }, [jarName, filePath, mode, fetchSide]);
+    setContent({ original: null, localization: null, loadingOrig: true, loadingLoc: true });
+    let cancelled = false;
+    Promise.all([fetchSide('original'), fetchSide('localization')]).then(([orig, loc]) => {
+      if (cancelled) return;
+      setContent({ original: orig, localization: loc, loadingOrig: false, loadingLoc: false });
+      setContentFor({ jarName, filePath });
+    });
+    return () => { cancelled = true; };
+  }, [jarName, filePath, fetchSide]);
 
   // Load string entries for overlay
   useEffect(() => {
@@ -188,10 +180,14 @@ export default function ViewerArea({
     );
   }
 
-  const loading = content.loadingOrig || content.loadingLoc;
+  const loading = contentFor.jarName !== jarName || contentFor.filePath !== filePath
+    || content.loadingOrig || content.loadingLoc;
 
   return (
-    <div className="main-area">
+    <div
+      className="main-area"
+      style={{ '--split': `${split * 100}%` } as React.CSSProperties}
+    >
       {/* Mode toggle */}
       <div className="mode-toggle-bar">
         <div className="mode-toggle">
@@ -208,55 +204,43 @@ export default function ViewerArea({
         </div>
       </div>
 
-      {/* Code area */}
-      <div className="code-area" ref={splitContainerRef}>
+      {/* Label bar — outside panel wrappers, never hidden */}
+      <div className={`panel-labels mode-${mode}`}>
+        <div className="panel-label panel-label-orig">原文</div>
+        <div className="panel-labels-gap" />
+        <div className="panel-label panel-label-loc">译文</div>
+      </div>
+
+      {/* Code area — both panels always rendered, CSS controls visibility */}
+      <div
+        className={`code-area mode-${mode}`}
+        ref={splitContainerRef}
+      >
         {loading && <div className="code-loading">加载中...</div>}
 
-        {mode === 'parallel' ? (
-          <>
-            <div
-              className="code-pane"
-              ref={leftRef}
-              style={{ flexBasis: `${split * 100}%`, flexGrow: 0, flexShrink: 0 }}
-            >
-              <CodePanel
-                code={content.original}
-                label="原文"
-                stringEntries={stringEntries.original ?? undefined}
-                activeUtf8Index={activeUtf8Index}
-                activeConstTable={activeConstTable}
-                highlightLines={highlightLines}
-                onClickEntry={e => onClickEntry?.(e, 'original')}
-              />
-            </div>
-            <div
-              className="split-resizer"
-              onPointerDown={onSplitDragStart}
-            />
-            <div className="code-pane" ref={rightRef} style={{ flex: 1 }}>
-              <CodePanel
-                code={content.localization}
-                label="译文"
-                stringEntries={stringEntries.localization ?? undefined}
-                activeUtf8Index={activeUtf8Index}
-                activeConstTable={activeConstTable}
-                highlightLines={highlightLines}
-                onClickEntry={e => onClickEntry?.(e, 'localization')}
-              />
-            </div>
-          </>
-        ) : (
+        <div className="panel-orig" ref={leftRef}>
           <CodePanel
-            code={mode === 'original' ? content.original : content.localization}
-            stringEntries={
-              (mode === 'original' ? stringEntries.original : stringEntries.localization) ?? undefined
-            }
+            code={content.original}
+            stringEntries={stringEntries.original ?? undefined}
             activeUtf8Index={activeUtf8Index}
             activeConstTable={activeConstTable}
             highlightLines={highlightLines}
-            onClickEntry={e => onClickEntry?.(e, mode as Dataset)}
+            onClickEntry={e => onClickEntry?.(e, 'original')}
           />
-        )}
+        </div>
+
+        <div className="split-resizer" onPointerDown={onSplitDragStart} />
+
+        <div className="panel-loc" ref={rightRef}>
+          <CodePanel
+            code={content.localization}
+            stringEntries={stringEntries.localization ?? undefined}
+            activeUtf8Index={activeUtf8Index}
+            activeConstTable={activeConstTable}
+            highlightLines={highlightLines}
+            onClickEntry={e => onClickEntry?.(e, 'localization')}
+          />
+        </div>
       </div>
     </div>
   );
