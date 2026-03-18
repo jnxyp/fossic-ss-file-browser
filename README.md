@@ -5,7 +5,7 @@
 `ss-file-browser` 是一个面向 Starsector 汉化流程的只读源码浏览器。  
 它把 ParaTranz 词条、反编译后的 Java 源码、字符串索引和 SQLite 数据库串起来，方便在“词条 <-> 源码上下文”之间快速跳转。
 
-当前仓库只保留 v2 架构：
+仓库主要目录：
 - `app_v2/`
 - `updater_v2/`
 - `data/`
@@ -26,7 +26,8 @@
 - `data/`
   持久化数据目录，包含 `ssfb.sqlite` 和最近一次反编译产物
 - `tools/cfr.jar`
-  updater 反编译 JAR 时使用
+  updater 反编译 JAR 时使用，项目当前使用的 CFR 版本来源为：
+  https://github.com/jnxyp/cfr
 
 ## 项目结构
 
@@ -41,7 +42,7 @@
 
 要求：
 - 已安装 Docker 和 Docker Compose
-- 本地存在 `tools/cfr.jar`
+- 本地存在 `tools/cfr.jar`（建议使用 https://github.com/jnxyp/cfr 构建或获取）
 
 启动：
 
@@ -80,7 +81,7 @@ Docker 下的挂载：
 - Git
 
 另外需要：
-- `tools/cfr.jar`
+- `tools/cfr.jar`（建议使用 https://github.com/jnxyp/cfr 构建或获取）
 
 ### 1. 启动 updater_v2
 
@@ -197,8 +198,6 @@ javascript:(function(){var s=document.createElement('script');s.src='http://loca
 
 ## 数据说明
 
-当前 v2 以 SQLite 为主，不再依赖旧版 `artifacts/` 目录。
-
 核心数据：
 - `data/ssfb.sqlite`
 - `data/decompiled/`
@@ -211,7 +210,8 @@ ParaTranz 子集信息会写入数据库，用于：
 ## 开发备注
 
 - `app_v2` 使用 `better-sqlite3` 直接读取 `data/ssfb.sqlite`
-- `updater_v2` 会从同一个远端仓库同步：
+- `updater_v2` 默认会同步以下远端仓库内容：
+  - https://github.com/TruthOriginem/Starsector-Localization-CN
   - `original/`
   - `localization/`
   - `para_tranz/para_tranz_map.json`
