@@ -18,6 +18,7 @@ const MAX_SIDEBAR = 560;
 const DEFAULT_SIDEBAR = 260;
 const PARATRANZ_HEARTBEAT_TIMEOUT_MS = 1600;
 const META_CACHE_TTL_MS = 30000;
+const DOUBLE_SHIFT_INTERVAL_MS = 400;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, v)); }
 
@@ -34,6 +35,8 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
   const [tab, setTab] = useState<Tab>('explorer');
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR);
   const [autoNavigate, setAutoNavigate] = useState<AutoNavigate | null>(null);
+  const [searchFocusRequest, setSearchFocusRequest] = useState(0);
+  const lastShiftAtRef = useRef(0);
 
   // Derive activeJar/activeFile directly from the URL — always in sync
   const { activeJar, activeFile } = useMemo(() => {
@@ -194,6 +197,48 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
     setAutoNavigate({ jarName, filePath });
   }, [router]);
 
+  const openSearchPanel = useCallback(() => {
+    setTab('search');
+    setSearchFocusRequest(prev => prev + 1);
+  }, []);
+
+  useEffect(() => {
+    function isEditableTarget(target: EventTarget | null) {
+      if (!(target instanceof HTMLElement)) return false;
+      return Boolean(target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""], [role="textbox"]'));
+    }
+
+    function isSearchPanelTarget(target: EventTarget | null) {
+      return target instanceof HTMLElement && Boolean(target.closest('.search-panel'));
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.repeat) return;
+
+      if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        openSearchPanel();
+        return;
+      }
+
+      if (event.key !== 'Shift' || event.ctrlKey || event.altKey || event.metaKey) return;
+      if (isEditableTarget(event.target) && !isSearchPanelTarget(event.target)) return;
+
+      const now = Date.now();
+      if (now - lastShiftAtRef.current <= DOUBLE_SHIFT_INTERVAL_MS) {
+        event.preventDefault();
+        lastShiftAtRef.current = 0;
+        openSearchPanel();
+        return;
+      }
+
+      lastShiftAtRef.current = now;
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [openSearchPanel]);
+
   return (
     <div className="app-shell">
       <div ref={layoutRef} className="app-body">
@@ -232,7 +277,7 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
               />
             </div>
             <div className={`sidebar-panel${tab !== 'search' ? ' sidebar-panel-hidden' : ''}`}>
-              <SearchPanel onNavigate={handleSearchNavigate} />
+              <SearchPanel onNavigate={handleSearchNavigate} focusRequest={searchFocusRequest} />
             </div>
           </div>
         </aside>

@@ -5,6 +5,7 @@ import type { Dataset, SearchMatch, SearchResult } from '@/lib/types';
 
 interface Props {
   onNavigate: (jarName: string, filePath: string, startLine?: number, dataset?: Dataset) => void;
+  focusRequest?: number;
 }
 
 const STEP = 22;
@@ -32,11 +33,12 @@ function highlightMatch(text: string, query: string) {
   );
 }
 
-export default function SearchPanel({ onNavigate }: Props) {
+export default function SearchPanel({ onNavigate, focusRequest = 0 }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const accumulated = useRef(0);
   const requestIdRef = useRef(0);
@@ -44,20 +46,23 @@ export default function SearchPanel({ onNavigate }: Props) {
   useEffect(() => {
     const scrollElement = resultsRef.current;
     if (!scrollElement) return;
+    const element = scrollElement;
+
     function onWheel(e: WheelEvent) {
       e.preventDefault();
       let px = e.deltaY;
       if (e.deltaMode === 1) px *= STEP;
-      if (e.deltaMode === 2) px *= scrollElement!.clientHeight;
+      if (e.deltaMode === 2) px *= element.clientHeight;
       accumulated.current += px;
       const steps = Math.trunc(accumulated.current / STEP);
       if (steps !== 0) {
-        scrollElement!.scrollTop += steps * STEP;
+        element.scrollTop += steps * STEP;
         accumulated.current -= steps * STEP;
       }
     }
-    scrollElement.addEventListener('wheel', onWheel, { passive: false });
-    return () => scrollElement.removeEventListener('wheel', onWheel);
+
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
   }, []);
 
   useEffect(() => {
@@ -102,10 +107,20 @@ export default function SearchPanel({ onNavigate }: Props) {
     };
   }, [query]);
 
+  useEffect(() => {
+    if (focusRequest === 0) return;
+    const input = inputRef.current;
+    if (!input) return;
+
+    input.focus();
+    if (input.value) input.select();
+  }, [focusRequest]);
+
   function toggleCollapse(key: string) {
     setCollapsed(prev => {
       const s = new Set(prev);
-      if (s.has(key)) s.delete(key); else s.add(key);
+      if (s.has(key)) s.delete(key);
+      else s.add(key);
       return s;
     });
   }
@@ -129,6 +144,7 @@ export default function SearchPanel({ onNavigate }: Props) {
     <div className="search-panel">
       <div className="search-input-wrap">
         <input
+          ref={inputRef}
           className="search-input"
           placeholder="搜索类名或字符串..."
           value={query}
@@ -177,12 +193,8 @@ export default function SearchPanel({ onNavigate }: Props) {
                   <span className="search-group-spacer" aria-hidden="true" />
                 )}
                 <div className="search-group-main" title={group.sourcePath}>
-                  <span className="search-group-name">
-                    {highlightMatch(fileName, query)}
-                  </span>
-                  <span className="search-group-path">
-                    {highlightMatch(group.sourcePath, query)}
-                  </span>
+                  <span className="search-group-name">{highlightMatch(fileName, query)}</span>
+                  <span className="search-group-path">{highlightMatch(group.sourcePath, query)}</span>
                 </div>
                 {stringMatches.length > 0 && (
                   <span className="search-group-count">{stringMatches.length}</span>
