@@ -19,6 +19,7 @@ export function decompile(jarPath: string, outputZip: string): void {
     `"${jarPath}"`,
     '--outputzip', `"${outputZip}"`,
     '--outputstringindex', 'true',
+    '--caseinsensitivefs', 'false',
   ].join(' ');
   logger.info('反编译:', path.basename(jarPath), '→', path.basename(outputZip));
   try {
