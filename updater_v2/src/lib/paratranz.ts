@@ -92,7 +92,7 @@ export function applyParatranzMatches(db: Database.Database): void {
       ON fc.source_file_id = sf.id
     JOIN paratranz_jar_targets pjt
       ON pjt.jar_name = sf.jar_name
-     AND pjt.owner_class_name = se.owner_class_name
+     AND pjt.owner_class_name = se.owner_class_name || se.const_table
      AND pjt.value = se.value
     WHERE fc.dataset = 'original'
   `);
