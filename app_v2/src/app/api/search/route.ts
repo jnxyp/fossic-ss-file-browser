@@ -3,6 +3,37 @@ import { getDb } from '@/lib/db';
 import type { SearchResult, SearchMatch } from '@/lib/types';
 
 const MAX_RESULTS = 200;
+const SNIPPET_CONTEXT_RADIUS = 15;
+
+function parseFlag(value: string | null, fallback = true) {
+  if (value == null) return fallback;
+  return value === '1' || value === 'true';
+}
+
+function buildSnippet(text: string, query: string) {
+  const normalizedText = text.replace(/\s+/g, ' ').trim();
+  const matchIndex = normalizedText.toLowerCase().indexOf(query.toLowerCase());
+  if (matchIndex < 0) return null;
+
+  const start = Math.max(0, matchIndex - SNIPPET_CONTEXT_RADIUS);
+  const end = Math.min(normalizedText.length, matchIndex + query.length + SNIPPET_CONTEXT_RADIUS);
+  const snippet = normalizedText.slice(start, end);
+  return `${start > 0 ? '…' : ''}${snippet}${end < normalizedText.length ? '…' : ''}`;
+}
+
+function findFirstMatchLine(sourceCode: string, query: string) {
+  const lines = sourceCode.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const snippet = buildSnippet(lines[i], query);
+    if (snippet) {
+      return {
+        startLine: i + 1,
+        snippet,
+      };
+    }
+  }
+  return null;
+}
 
 /**
  * GET /api/search?q=
@@ -11,15 +42,18 @@ const MAX_RESULTS = 200;
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q')?.trim() ?? '';
+  const searchClasses = parseFlag(searchParams.get('class'));
+  const searchStrings = parseFlag(searchParams.get('string'));
+  const searchCode = parseFlag(searchParams.get('code'));
 
-  if (!q) {
+  if (!q || (!searchClasses && !searchStrings && !searchCode)) {
     return NextResponse.json({ results: [] });
   }
 
   try {
     const db = getDb();
     const like = `%${q}%`;
-    const classRows = db.prepare(`
+    const classRows = searchClasses ? db.prepare(`
       SELECT DISTINCT
         sf.jar_name,
         sf.source_path,
@@ -35,9 +69,9 @@ export async function GET(request: Request) {
     `).all(like, like, MAX_RESULTS) as Array<{
       jar_name: string; source_path: string;
       has_original: number; has_localization: number;
-    }>;
+    }> : [];
 
-    const stringRows = db.prepare(`
+    const stringRows = searchStrings ? db.prepare(`
       SELECT
         sf.jar_name,
         sf.source_path,
@@ -65,7 +99,27 @@ export async function GET(request: Request) {
       owner_class_name: string; start_line: number;
       dataset: string;
       included_by_paratranz: number;
-    }>;
+    }> : [];
+
+    const codeRows = searchCode ? db.prepare(`
+      SELECT
+        sf.jar_name,
+        sf.source_path,
+        sf.has_original,
+        sf.has_localization,
+        fc.dataset,
+        fc.source_code
+      FROM file_contents fc
+      JOIN source_files sf ON fc.source_file_id = sf.id
+      WHERE fc.source_code LIKE ?
+      ORDER BY sf.jar_name, sf.source_path, fc.dataset
+      LIMIT ?
+    `).all(like, MAX_RESULTS) as Array<{
+      jar_name: string; source_path: string;
+      has_original: number; has_localization: number;
+      dataset: string;
+      source_code: string;
+    }> : [];
 
     const map = new Map<string, SearchResult>();
 
@@ -95,10 +149,43 @@ export async function GET(request: Request) {
         type: 'string',
         dataset: r.dataset as 'original' | 'localization',
         value: r.value,
+        snippet: buildSnippet(r.value, q) ?? r.value,
         utf8Index: r.utf8_index,
         ownerClassName: r.owner_class_name,
         startLine: r.start_line,
         includedByParatranz: r.included_by_paratranz === 1,
+      });
+    }
+
+    const codeMatchSeen = new Map<string, Set<string>>();
+
+    for (const r of codeRows) {
+      const located = findFirstMatchLine(r.source_code, q);
+      const key = `${r.jar_name}\0${r.source_path}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          jarName: r.jar_name,
+          sourcePath: r.source_path,
+          hasOriginal: r.has_original === 1,
+          hasLocalization: r.has_localization === 1,
+          matches: [],
+        });
+      }
+
+      const snippet = located?.snippet ?? q;
+      const signature = `${located?.startLine ?? 0}\0${snippet}`;
+      const seenDatasets = codeMatchSeen.get(key) ?? new Set<string>();
+      if (seenDatasets.has(signature)) {
+        continue;
+      }
+
+      seenDatasets.add(signature);
+      codeMatchSeen.set(key, seenDatasets);
+      map.get(key)!.matches.push({
+        type: 'code',
+        value: snippet,
+        snippet,
+        startLine: located?.startLine,
       });
     }
 

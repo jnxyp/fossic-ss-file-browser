@@ -653,6 +653,10 @@ a { color: inherit; text-decoration: none; }
   white-space: nowrap;
   flex: 1;
 }
+.search-match-value-extracted {
+  background: var(--hl-string-bg);
+  padding: 0 1px;
+}
 .search-match-meta { color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
 .dataset-badge {
   font-size: 10px;
@@ -710,6 +714,42 @@ a { color: inherit; text-decoration: none; }
 .status-link { color: inherit; opacity: 0.9; }
 .status-link:hover { opacity: 1; text-decoration: underline; }
 .status-link strong { font-weight: 600; }
+
+.search-scope-row {
+  display: flex;
+  gap: 6px;
+  padding: 0;
+  flex-wrap: wrap;
+}
+
+.search-scope-btn {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 100ms, color 100ms, border-color 100ms;
+}
+
+.search-scope-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+
+.search-scope-btn.active {
+  background: var(--active-bg);
+  border-color: var(--active-border);
+  color: var(--accent);
+}
+
+.search-scope-btn-code.active {
+  background: var(--badge-extract-bg);
+  border-color: var(--badge-extract-border);
+  color: var(--badge-extract-fg);
+}
 
 .theme-toggle {
   height: 18px;

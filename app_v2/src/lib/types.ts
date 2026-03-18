@@ -35,7 +35,7 @@ export interface MetaInfo {
 }
 
 export interface SearchMatch {
-  type: 'class' | 'string';
+  type: 'class' | 'string' | 'code';
   dataset?: Dataset;
   value?: string;
   matchedPath?: string;
@@ -43,6 +43,7 @@ export interface SearchMatch {
   ownerClassName?: string;
   startLine?: number;
   includedByParatranz?: boolean;
+  snippet?: string;
 }
 
 export interface SearchResult {
