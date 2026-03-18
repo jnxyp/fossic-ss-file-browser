@@ -17,6 +17,7 @@ const MIN_SIDEBAR = 180;
 const MAX_SIDEBAR = 560;
 const DEFAULT_SIDEBAR = 260;
 const PARATRANZ_HEARTBEAT_TIMEOUT_MS = 1600;
+const META_CACHE_TTL_MS = 30000;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, v)); }
 
@@ -91,6 +92,8 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
     window.name = '__ssfb_viewer';
     writeParatranzConnection(false);
     let heartbeatTimer: number | null = null;
+    let cachedRevision = '';
+    let cachedRevisionAt = 0;
 
     function refreshConnectionHeartbeat() {
       writeParatranzConnection(true);
@@ -101,13 +104,28 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
       }, PARATRANZ_HEARTBEAT_TIMEOUT_MS);
     }
 
-    async function sendReady() {
-      if (!window.opener) return;
-      let revision = '';
+    async function getRevision() {
+      const now = Date.now();
+      if (now - cachedRevisionAt < META_CACHE_TTL_MS) {
+        return cachedRevision;
+      }
+
       try {
         const r = await fetch('/api/meta');
-        if (r.ok) { const d = await r.json(); revision = d.revision ?? ''; }
+        if (r.ok) {
+          const d = await r.json();
+          cachedRevision = d.revision ?? '';
+          cachedRevisionAt = now;
+          return cachedRevision;
+        }
       } catch { /* */ }
+
+      return cachedRevision;
+    }
+
+    async function sendReady() {
+      if (!window.opener) return;
+      const revision = await getRevision();
       window.opener.postMessage({
         protocol: PROTOCOL_NAME,
         type: MessageType.FB_READY,
