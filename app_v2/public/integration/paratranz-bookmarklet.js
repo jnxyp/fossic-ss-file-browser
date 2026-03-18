@@ -23,6 +23,7 @@
   var PROTOCOL_NAME = 'ss-file-browser/v1';
   var AUTO_FOLLOW_STORAGE_KEY = '__ssfb_auto_follow';
   var WINDOW_CHECK_INTERVAL_MS = 1500;
+  var HEARTBEAT_INTERVAL_MS = 1500;
   var HANDSHAKE_TIMEOUT_MS = 800;
   var VIEWER_WINDOW_NAME = '__ssfb_viewer';
   var DEBUG_LOGGING = true;
@@ -63,6 +64,7 @@
   var autoFollow = loadAutoFollow();
   var connectionStatus = 'disconnected';
   var monitorTimer = null;
+  var heartbeatTimer = null;
   var hasCompletedHandshake = false;
   var isTriggerNavigating = false;
   var PAGE_SIZE = '800';
@@ -799,23 +801,60 @@
     }
   }
 
-  function handleDocumentClick(event) {
-      if (!event.isTrusted) {
-        return;
-      }
-      var target = event.target;
-      if (!target || typeof target.closest !== 'function') {
-        return;
-      }
+  function isEditorPrevNextControl(target) {
+    if (!target || typeof target.closest !== 'function') {
+      return false;
+    }
 
-      var row = target.closest('.string-list .row.string');
-      if (row) {
-        window.setTimeout(triggerNavigate, 100);
-      }
+    var button = target.closest('button[title]');
+    if (!button) {
+      return false;
+    }
+
+    var title = (button.getAttribute('title') || '').trim();
+    return title === '上一条 (Alt + Enter)' || title === '下一条 (Shift + Enter)';
+  }
+
+  function handleDocumentClick(event) {
+    if (!event.isTrusted) {
+      return;
+    }
+    var target = event.target;
+    if (!target || typeof target.closest !== 'function') {
+      return;
+    }
+
+    var row = target.closest('.string-list .row.string');
+    if (row) {
+      window.setTimeout(triggerNavigate, 100);
+      return;
+    }
+
+    if (isEditorPrevNextControl(target)) {
+      debugLog('handleDocumentClick:switch-control');
+      window.setTimeout(triggerNavigate, 100);
+    }
+  }
+
+  function handleDocumentKeydown(event) {
+    if (!event.isTrusted || event.key !== 'Enter') {
+      return;
+    }
+
+    if (!(event.altKey || event.shiftKey)) {
+      return;
+    }
+
+    debugLog('handleDocumentKeydown:navigate-shortcut', {
+      altKey: event.altKey,
+      shiftKey: event.shiftKey,
+    });
+    window.setTimeout(triggerNavigate, 100);
   }
 
   function attachListeners() {
     document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('keydown', handleDocumentKeydown);
   }
 
   function startWindowMonitor() {
@@ -824,6 +863,19 @@
         setConnectionStatus('disconnected');
       }
     }, WINDOW_CHECK_INTERVAL_MS);
+  }
+
+  function startHeartbeat() {
+    if (heartbeatTimer) {
+      window.clearInterval(heartbeatTimer);
+    }
+
+    heartbeatTimer = window.setInterval(function () {
+      if (!isBrowserOpen()) {
+        return;
+      }
+      sendPing();
+    }, HEARTBEAT_INTERVAL_MS);
   }
 
   function handleMessage(event) {
@@ -880,7 +932,13 @@
       monitorTimer = null;
     }
 
+    if (heartbeatTimer) {
+      window.clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+
     document.removeEventListener('click', handleDocumentClick);
+    document.removeEventListener('keydown', handleDocumentKeydown);
     window.removeEventListener('message', handleMessage);
 
     if (statusEl) {
@@ -895,6 +953,7 @@
   renderStatusBar();
   attachListeners();
   startWindowMonitor();
+  startHeartbeat();
   window.addEventListener('message', handleMessage);
   openBrowser();
 })();

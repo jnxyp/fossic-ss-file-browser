@@ -9,12 +9,14 @@ import {
   ALLOWED_ORIGINS, MessageType, PROTOCOL_NAME,
   type AppMessage, type NavigateToStringPayload,
 } from '@/lib/protocol';
+import { writeParatranzConnection } from '@/lib/paratranz-connection';
 import type { Dataset } from '@/lib/types';
 
 const SIDEBAR_KEY = 'ssfb:sidebar-width';
 const MIN_SIDEBAR = 180;
 const MAX_SIDEBAR = 560;
 const DEFAULT_SIDEBAR = 260;
+const PARATRANZ_HEARTBEAT_TIMEOUT_MS = 1600;
 
 function clamp(v: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, v)); }
 
@@ -87,6 +89,17 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
   // ParaTranz message handler
   useEffect(() => {
     window.name = '__ssfb_viewer';
+    writeParatranzConnection(false);
+    let heartbeatTimer: number | null = null;
+
+    function refreshConnectionHeartbeat() {
+      writeParatranzConnection(true);
+      if (heartbeatTimer) window.clearTimeout(heartbeatTimer);
+      heartbeatTimer = window.setTimeout(() => {
+        writeParatranzConnection(false);
+        heartbeatTimer = null;
+      }, PARATRANZ_HEARTBEAT_TIMEOUT_MS);
+    }
 
     async function sendReady() {
       if (!window.opener) return;
@@ -107,6 +120,7 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
       if (!ALLOWED_ORIGINS.includes(ev.origin)) return;
       const msg = ev.data as AppMessage;
       if (msg?.protocol !== PROTOCOL_NAME) return;
+      refreshConnectionHeartbeat();
 
       if (msg.type === MessageType.PT_PING) {
         void sendReady();
@@ -137,7 +151,12 @@ export default function ViewerLayout({ children }: { children: React.ReactNode }
 
     window.addEventListener('message', handleMessage);
     void sendReady();
-    return () => window.removeEventListener('message', handleMessage);
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      if (heartbeatTimer) window.clearTimeout(heartbeatTimer);
+      writeParatranzConnection(false);
+    };
   }, [router]);
 
   const handleSelect = useCallback((jarName: string, filePath: string) => {
