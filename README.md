@@ -71,7 +71,7 @@ docker compose down
 - `app`
   默认监听 `http://localhost:3000`
 - `updater`
-  周期性同步远端仓库并更新 `data/ssfb.sqlite`
+  监听 `http://localhost:3001`，接收 GitHub push webhook 后触发同步并更新 `data/ssfb.sqlite`
 
 挂载：
 
@@ -111,8 +111,10 @@ npm run start
   默认是 `/app/data`，本地运行建议改成仓库下的 `data`
 - `CFR_JAR`
   本地建议指向 `tools/cfr.jar`
-- `SYNC_INTERVAL`
-  同步间隔，单位秒，默认 `600`
+- `WEBHOOK_PORT`
+  webhook 监听端口，默认 `3001`
+- `GITHUB_BRANCH`
+  只处理该分支的 push 事件，默认 `master`
 - `APP_INTERNAL_URL`
   updater 通知 app 刷新时使用；本地运行建议设为 `http://localhost:3000`
 - `WORK_DIR`
@@ -136,6 +138,27 @@ $env:CFR_JAR="../tools/cfr.jar"
 $env:APP_INTERNAL_URL="http://localhost:3000"
 npm run start
 ```
+
+### Webhook 配置
+
+updater 启动后监听所有路径的 POST 请求。在 GitHub 仓库 Settings → Webhooks 中添加：
+
+- **Payload URL**：`https://<your-domain>/webhook`（Caddy 将 `/webhook` 路径反代到 `updater:3001`，并在此层配置鉴权）
+- **Content type**：`application/json`
+- **Events**：`Just the push event`
+
+updater 从 payload 中读取以下字段：
+
+```jsonc
+{
+  "ref": "refs/heads/master",   // 用于过滤目标分支，不匹配则忽略
+  "after": "a1b2c3d4..."        // push 后的 commit SHA，用于幂等判断
+}
+```
+
+收到符合条件的 webhook 后，updater 立即返回 `202 Accepted`，异步执行同步流水线。若 `after` 与数据库中已存 SHA 相同，则幂等跳过（重复投递安全）。
+
+> 鉴权在 Caddy 反代层面配置，updater 本身不做鉴权。
 
 ### 2. 启动 app_v2
 
@@ -246,19 +269,16 @@ ParaTranz 子集信息会写入数据库，用于：
 
 ## 部署说明
 
-当前线上部署方式：
+推荐通过 Caddy 反向代理统一对外暴露，`app` 和 `updater` 共用同一域名：
 
-- 服务器：`cn-hk-docker`
-- 项目目录：`~/docker_projects/fossic-ss-file-browser`
-- 启动方式：`docker compose up -d --build`
-- 访问域名：`https://ss-file.jnxyp.net`
-- 外部入口：Caddy 反向代理
-- 认证方式：HTTP Basic Auth
+- `/`（及其他路径）→ `localhost:3000`（app）
+- `/webhook`（或任意自定义前缀）→ `localhost:3001`（updater webhook）
 
-说明：
+Caddy 可在 `/webhook` 路径上配置鉴权，updater 本身不做鉴权。
 
-- 目前 Caddy 反代到 `localhost:3000`
-- updater 与 app 的内部通知使用容器内地址 `http://app:3000`
+内部服务通信：
+
+- updater 通知 app 使用容器内地址 `http://app:3000`
 
 ## 开发备注
 

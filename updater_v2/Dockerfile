@@ -10,6 +10,8 @@ RUN npm install
 COPY . .
 
 ENV DATA_ROOT=/app/data
-ENV SYNC_INTERVAL=600
+ENV WEBHOOK_PORT=3001
+
+EXPOSE 3001
 
 CMD ["npm", "run", "start"]

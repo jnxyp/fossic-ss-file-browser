@@ -17,13 +17,15 @@ services:
     build:
       context: ./updater_v2
       dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
     volumes:
       - ./data:/app/data
       - ./tools:/app/tools:ro
     environment:
       - DATA_ROOT=/app/data
       - APP_INTERNAL_URL=http://app:3000
-      - SYNC_INTERVAL=600
+      - WEBHOOK_PORT=3001
     networks:
       - ss-network
 

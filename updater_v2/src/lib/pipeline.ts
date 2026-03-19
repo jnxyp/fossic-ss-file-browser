@@ -24,14 +24,14 @@ function readRevision(db: Database.Database): string {
   return row?.value ?? '';
 }
 
-export async function run(force = false): Promise<void> {
+export async function run(force = false, knownSha?: string): Promise<void> {
   logger.info('=== 开始检查更新 ===');
 
   try {
     // ------------------------------------------------------------------
-    // 1. 检查远端 SHA
+    // 1. 检查远端 SHA（若 webhook 已提供则跳过 API 调用）
     // ------------------------------------------------------------------
-    const latestSha = await getLatestCommitSha();
+    const latestSha = knownSha ?? await getLatestCommitSha();
     const db        = openDb(DB_PATH);
     initSchema(db);
 
